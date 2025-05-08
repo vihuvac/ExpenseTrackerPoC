@@ -36,6 +36,7 @@ struct ContentView: View {
         
         Spacer()
       }
+      .frame(maxWidth: .infinity)
       .padding()
       .background(Color(.systemGray6))
       .navigationTitle("Expenses")

@@ -15,7 +15,7 @@ class ModelManager {
   func loadModel() async throws {
     // Mock model loading
     print("Simulating model loading...")
-    try await Task.sleep(nanoseconds: 2_000_000_000) // Simulate 2s delay
+    try await Task.sleep(nanoseconds: 1_000_000_000) // Simulate 1s delay
     print("Model loaded successfully")
   }
 
