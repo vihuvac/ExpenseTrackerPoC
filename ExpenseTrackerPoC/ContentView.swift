@@ -22,9 +22,14 @@ struct ContentView: View {
         } else {
           ExpenseFormView(
             merchant: $viewModel.merchant,
+            selectedPhoto: $viewModel.selectedPhoto,
+            selectedImage: $viewModel.selectedImage,
             isLoading: viewModel.isLoading,
             onCategorize: { await viewModel.categorizeExpense() }
           )
+          .onChange(of: viewModel.selectedPhoto) { _, newItem in
+            Task { await viewModel.handlePhotoSelection(newItem) }
+          }
           
           if !viewModel.category.isEmpty {
             Text("Category: \(viewModel.category)")
