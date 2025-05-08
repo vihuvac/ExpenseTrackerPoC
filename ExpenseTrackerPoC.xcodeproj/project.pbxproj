@@ -13,6 +13,7 @@
 		D35347C82DCD574700874F30 /* MLXLinalg in Frameworks */ = {isa = PBXBuildFile; productRef = D35347C72DCD574700874F30 /* MLXLinalg */; };
 		D35347CA2DCD574700874F30 /* MLXNN in Frameworks */ = {isa = PBXBuildFile; productRef = D35347C92DCD574700874F30 /* MLXNN */; };
 		D35347CD2DCD578800874F30 /* MLXLLM in Frameworks */ = {isa = PBXBuildFile; productRef = D35347CC2DCD578800874F30 /* MLXLLM */; };
+		D35347DA2DCD5BAA00874F30 /* SQLite in Frameworks */ = {isa = PBXBuildFile; productRef = D35347D92DCD5BAA00874F30 /* SQLite */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -36,6 +37,7 @@
 				D35347C62DCD574700874F30 /* MLXFast in Frameworks */,
 				D35347C82DCD574700874F30 /* MLXLinalg in Frameworks */,
 				D35347C22DCD574700874F30 /* MLX in Frameworks */,
+				D35347DA2DCD5BAA00874F30 /* SQLite in Frameworks */,
 				D35347CA2DCD574700874F30 /* MLXNN in Frameworks */,
 				D35347C42DCD574700874F30 /* MLXFFT in Frameworks */,
 			);
@@ -86,6 +88,7 @@
 				D35347C72DCD574700874F30 /* MLXLinalg */,
 				D35347C92DCD574700874F30 /* MLXNN */,
 				D35347CC2DCD578800874F30 /* MLXLLM */,
+				D35347D92DCD5BAA00874F30 /* SQLite */,
 			);
 			productName = ExpenseTrackerPoC;
 			productReference = D35347B22DCD55F200874F30 /* ExpenseTrackerPoC.app */;
@@ -118,6 +121,7 @@
 			packageReferences = (
 				D35347C02DCD574700874F30 /* XCRemoteSwiftPackageReference "mlx-swift" */,
 				D35347CB2DCD578800874F30 /* XCRemoteSwiftPackageReference "mlx-swift-examples" */,
+				D35347D82DCD5BAA00874F30 /* XCRemoteSwiftPackageReference "SQLite" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = D35347B32DCD55F200874F30 /* Products */;
@@ -367,6 +371,14 @@
 				minimumVersion = 2.21.2;
 			};
 		};
+		D35347D82DCD5BAA00874F30 /* XCRemoteSwiftPackageReference "SQLite" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/stephencelis/SQLite.swift";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.15.3;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -399,6 +411,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = D35347CB2DCD578800874F30 /* XCRemoteSwiftPackageReference "mlx-swift-examples" */;
 			productName = MLXLLM;
+		};
+		D35347D92DCD5BAA00874F30 /* SQLite */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = D35347D82DCD5BAA00874F30 /* XCRemoteSwiftPackageReference "SQLite" */;
+			productName = SQLite;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

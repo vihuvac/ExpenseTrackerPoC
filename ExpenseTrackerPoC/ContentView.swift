@@ -8,14 +8,34 @@
 import SwiftUI
 
 struct ContentView: View {
+  @StateObject private var viewModel = ExpenseViewModel()
+  
   var body: some View {
-    VStack {
-      Image(systemName: "globe")
-        .imageScale(.large)
-        .foregroundStyle(.tint)
-      Text("Hello, world!")
+    NavigationView {
+      VStack(spacing: 20) {
+        Text("Expense Tracker PoC")
+          .font(.title)
+          .fontWeight(.bold)
+        
+        ExpenseFormView(
+          merchant: $viewModel.merchant,
+          isLoading: viewModel.isLoading,
+          onCategorize: { await viewModel.categorizeExpense() }
+        )
+        
+        if !viewModel.category.isEmpty {
+          Text("Category: \(viewModel.category)")
+            .font(.headline)
+        }
+        
+        ExpenseListView(expenses: viewModel.expenses)
+        
+        Spacer()
+      }
+      .padding()
+      .background(Color(.systemGray6))
+      .navigationTitle("Expenses")
     }
-    .padding()
   }
 }
 
