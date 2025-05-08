@@ -17,24 +17,31 @@ struct ContentView: View {
           .font(.title)
           .fontWeight(.bold)
         
-        ExpenseFormView(
-          merchant: $viewModel.merchant,
-          isLoading: viewModel.isLoading,
-          onCategorize: { await viewModel.categorizeExpense() }
-        )
-        
-        if !viewModel.category.isEmpty {
-          Text("Category: \(viewModel.category)")
-            .font(.headline)
+        if viewModel.isModelLoading {
+          ProgressView("Loading Model...")
+        } else {
+          ExpenseFormView(
+            merchant: $viewModel.merchant,
+            isLoading: viewModel.isLoading,
+            onCategorize: { await viewModel.categorizeExpense() }
+          )
+          
+          if !viewModel.category.isEmpty {
+            Text("Category: \(viewModel.category)")
+              .font(.headline)
+          }
+          
+          ExpenseListView(expenses: viewModel.expenses)
         }
-        
-        ExpenseListView(expenses: viewModel.expenses)
         
         Spacer()
       }
       .padding()
       .background(Color(.systemGray6))
       .navigationTitle("Expenses")
+      .task {
+        await viewModel.loadModel()
+      }
     }
   }
 }
