@@ -32,18 +32,27 @@ class ModelManager {
     }
     
     let fullPrompt = "\(prompt)\nMerchant: \(input)"
-    let parameters = GenerateParameters(temperature: 0.7, topP: 0.9)
+    let parameters = GenerateParameters(temperature: 0.5, topP: 0.7) // Lower for precision
     
     let userInput = UserInput(prompt: fullPrompt)
     
-    let maxTokens = 15 // Allow longer words like "Groceries"
+    let maxTokens = 10
     let validCategories = ["Dining", "Transportation", "Entertainment", "Groceries", "Other"]
+    
+    // Fallback for common merchants
+    let merchantFallback: [String: String] = [
+      "walmart": "Groceries",
+      "starbucks": "Dining"
+    ]
+    
+    if let fallbackCategory = merchantFallback[input.lowercased()] {
+      print("Using fallback for \(input): \(fallbackCategory)")
+      return fallbackCategory
+    }
     
     let result = try await modelContainer.perform { context in
       let lmInput = try await context.processor.prepare(input: userInput)
       
-      // Create a dedicated class to track token count within the closure
-      // This is thread-safe because it's a reference type used within a single closure
       final class TokenCounter {
         var count = 0
       }
@@ -56,8 +65,17 @@ class ModelManager {
       ) { tokens in
         counter.count += tokens.count
         let text = context.tokenizer.decode(tokens: tokens)
-        print("Generating: \(text)")
-        if counter.count >= maxTokens || text.contains("\n") || text.contains("!") || text.contains(",") {
+        let rawTokens = tokens.map { String($0) }.joined(separator: ", ")
+        print("Generating: text='\(text)', rawTokens=[\(rawTokens)]")
+        if counter.count >= maxTokens ||
+          text.contains("\n") ||
+          text.contains("!") ||
+          text.contains(",") ||
+          text.contains(".") ||
+          text.contains(" ") ||
+          text.contains(";") ||
+          validCategories.contains(text.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines))
+        {
           return .stop
         }
         return .more
@@ -67,8 +85,7 @@ class ModelManager {
     }
     
     let trimmedResult = result.trimmingCharacters(in: .whitespacesAndNewlines)
-    
-    // Validate output
+    print("Final output: '\(trimmedResult)'")
     return validCategories.contains(trimmedResult) ? trimmedResult : "Other"
   }
 }
