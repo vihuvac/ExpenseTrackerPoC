@@ -28,29 +28,22 @@ class ModelManager {
   
   func predict(input: String, prompt: String) async throws -> String {
     guard let modelContainer = modelContainer else {
-      throw NSError(domain: "Model not loaded", code: -1)
+      throw NSError(domain: "Model not loaded", code: -1, userInfo: [NSLocalizedDescriptionKey: "Model not loaded"])
     }
     
-    let fullPrompt = "\(prompt)\nMerchant: \(input)"
+    let fullPrompt = prompt // Use the full prompt provided by ExpenseViewModel
+    print("Prompt: \(fullPrompt)")
+    
     let parameters = GenerateParameters(temperature: 0.2, topP: 0.7) // Lower temperature for more precise answers
-    
     let userInput = UserInput(prompt: fullPrompt)
-    
     let maxTokens = 15
     let validCategories = ["Dining", "Transportation", "Entertainment", "Groceries", "Electronics", "Other"]
     
-    // Fallback for common merchants
-    let merchantFallback: [String: String] = [
-      "walmart": "Groceries",
-      "starbucks": "Dining"
-    ]
-    
-    if let fallbackCategory = merchantFallback[input.lowercased()] {
-      print("Using fallback for \(input): \(fallbackCategory)")
-      return fallbackCategory
-    }
-    
     let result = try await modelContainer.perform { context in
+      // Tokenize input using context.tokenizer
+      let inputTokens = context.tokenizer.encode(text: fullPrompt)
+      print("Input tokens: \(inputTokens)")
+      
       let lmInput = try await context.processor.prepare(input: userInput)
       
       final class TokenCounter {

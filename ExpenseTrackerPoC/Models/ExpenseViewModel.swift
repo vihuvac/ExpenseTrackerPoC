@@ -26,6 +26,7 @@ class ExpenseViewModel: ObservableObject {
   private let modelManager = ModelManager.shared
   private let ocrManager = OCRManager.shared
   private let databaseManager = DatabaseManager.shared
+  private var processingTask: Task<Void, Never>?
   
   func loadModel() async {
     do {
@@ -45,7 +46,15 @@ class ExpenseViewModel: ObservableObject {
     }
   }
   
-  func categorizeExpense() async {
+  private func getFinalCategory(manualCategory: String?, receiptText: String) async throws -> String {
+    if let manualCategory = manualCategory {
+      return manualCategory
+    } else {
+      return try await predictCategory(receiptText: receiptText)
+    }
+  }
+  
+  func categorizeExpense(manualCategory: String? = nil) async {
     guard !merchant.isEmpty else {
       await MainActor.run {
         errorMessage = "Please enter a merchant name"
@@ -56,121 +65,197 @@ class ExpenseViewModel: ObservableObject {
     
     await MainActor.run { isLoading = true }
     
-    do {
-      let prompt = """
-      Analyze this merchant and categorize it into one of these exact categories:
-      - Dining (for restaurants, cafes)
-      - Transportation (for taxis, fuel)
-      - Entertainment (for movies, events)
-      - Groceries (for supermarkets, food)
-      - Electronics (for tech items)
-      - Other (anything else)
-      
-      Return only the exact category name, nothing else.
-      Merchant: \(merchant)
-      """
-      
-      let result = try await withTimeout(seconds: 15) {
-        try await self.modelManager.predict(input: self.merchant, prompt: prompt)
+    processingTask = Task {
+      do {
+        let receiptText = try await fetchReceiptText()
+        let finalCategory = try await getFinalCategory(manualCategory: manualCategory, receiptText: receiptText)
+
+        let newExpense = Expense(
+          id: Int64(expenses.count + 1),
+          merchant: merchant,
+          category: finalCategory,
+          amount: amount,
+          timestamp: Date()
+        )
+        
+        try databaseManager.saveExpense(newExpense)
+        
+        await MainActor.run {
+          category = finalCategory
+          expenses.append(newExpense)
+          resetForm()
+        }
+      } catch {
+        print("Categorization error: \(error)")
+        await MainActor.run {
+          errorMessage = "Failed to categorize: \(error.localizedDescription)"
+          showErrorAlert = true
+        }
       }
-      
-      let newExpense = Expense(
-        id: Int64(expenses.count + 1),
-        merchant: merchant,
-        category: result,
-        amount: amount,
-        timestamp: Date()
-      )
-      
-      try databaseManager.saveExpense(newExpense)
-      
-      await MainActor.run {
-        category = result
-        expenses.append(newExpense)
-        merchant = ""
-        amount = 0
-        selectedPhoto = nil
-        selectedImage = nil
-        isLoading = false
+      await MainActor.run { isLoading = false }
+    }
+  }
+  
+  func editExpense(_ expense: Expense, manualCategory: String? = nil, newMerchant: String, newAmount: Double) async {
+    await MainActor.run { isLoading = true }
+    processingTask = Task {
+      do {
+        let receiptText = try await fetchReceiptText()
+        let finalCategory = try await getFinalCategory(manualCategory: manualCategory, receiptText: receiptText)
+        
+        let updatedExpense = Expense(
+          id: expense.id,
+          merchant: newMerchant,
+          category: finalCategory,
+          amount: newAmount,
+          timestamp: expense.timestamp
+        )
+        
+        try databaseManager.updateExpense(updatedExpense)
+        
+        await MainActor.run {
+          if let index = expenses.firstIndex(where: { $0.id == expense.id }) {
+            expenses[index] = updatedExpense
+          }
+          resetForm()
+        }
+      } catch {
+        print("Edit expense error: \(error)")
+        await MainActor.run {
+          errorMessage = "Failed to edit expense: \(error.localizedDescription)"
+          showErrorAlert = true
+        }
       }
-    } catch {
-      print("Categorization error: \(error)")
-      await MainActor.run {
-        errorMessage = "Failed to categorize expense: \(error.localizedDescription)"
-        showErrorAlert = true
-        isLoading = false
-      }
+      await MainActor.run { isLoading = false }
     }
   }
   
   func handlePhotoSelection(_ item: PhotosPickerItem?) async {
-    guard let item = item else {
-      await MainActor.run { merchant = "" }
+    guard let item else {
+      await MainActor.run { resetForm() }
       return
     }
     
     await MainActor.run { isLoading = true }
     
-    do {
-      let data = try await withTimeout(seconds: 10) {
-        try await item.loadTransferable(type: Data.self)
-      }
-      
-      guard let data = data, let uiImage = UIImage(data: data) else {
-        throw NSError(domain: "Image conversion failed", code: -1)
-      }
-      
-      let text = try await withTimeout(seconds: 10) {
-        try await self.ocrManager.extractText(from: uiImage)
-      }
-      
-      print("OCR extracted: \(text)")
-      let merchant = extractMerchant(from: text)
-      let amount = extractAmount(from: text)
-      
-      await MainActor.run {
-        selectedImage = uiImage
-        self.merchant = merchant
-        self.amount = amount
-        isLoading = false
-      }
-    } catch {
-      print("OCR error: \(error)")
-      await MainActor.run {
-        errorMessage = "Failed to process receipt: \(error.localizedDescription)"
-        showErrorAlert = true
-        isLoading = false
+    processingTask = Task {
+      do {
+        let data = try await withTimeout(seconds: 10) {
+          try await item.loadTransferable(type: Data.self)
+        }
+        guard let data, let uiImage = UIImage(data: data) else {
+          throw NSError(domain: "Image conversion failed", code: -1)
+        }
+        let text = try await withTimeout(seconds: 10) {
+          try await self.ocrManager.extractText(from: uiImage)
+        }
+        print("OCR extracted: \(text)")
+        let merchant = extractMerchant(from: text)
+        let amount = extractAmount(from: text)
+        await MainActor.run {
+          selectedImage = uiImage
+          self.merchant = merchant
+          self.amount = amount
+          isLoading = false
+        }
+      } catch {
+        print("OCR error: \(error)")
+        await MainActor.run {
+          errorMessage = "Failed to process receipt: \(error.localizedDescription)"
+          showErrorAlert = true
+          isLoading = false
+        }
       }
     }
+  }
+  
+  func deleteExpense(at offsets: IndexSet) {
+    Task {
+      do {
+        // Convert IndexSet to an Array to iterate manually
+        for index in Array(offsets) {
+          let expense = expenses[index]
+          try databaseManager.deleteExpense(id: expense.id)
+        }
+        
+        // Update the UI after all deletions are complete
+        await MainActor.run {
+          expenses.remove(atOffsets: offsets)
+        }
+      } catch {
+        await MainActor.run {
+          errorMessage = "Failed to delete expense: \(error.localizedDescription)"
+          showErrorAlert = true
+        }
+      }
+    }
+  }
+  
+  func exportExpenses() throws -> URL {
+    try databaseManager.exportToCSV()
+  }
+  
+  func importExpenses(from url: URL) async throws {
+    try databaseManager.importFromCSV(url: url)
+    let updatedExpenses = try databaseManager.loadExpenses()
+    await MainActor.run { expenses = updatedExpenses }
+  }
+  
+  private func fetchReceiptText() async throws -> String {
+    guard let image = selectedImage else { return merchant }
+    return try await withTimeout(seconds: 10) {
+      try await self.ocrManager.extractText(from: image)
+    }
+  }
+  
+  private func predictCategory(receiptText: String) async throws -> String {
+    let validCategories = ["Dining", "Transportation", "Entertainment", "Groceries", "Electronics", "Other"]
+    
+    let prompt = """
+    Categorize the purchase into one of: \(validCategories.joined(separator: ", ")). Return only the category name. For example, if the merchant is 'Walmart' and the receipt mentions 'TRAVEL ADAPT', return 'Electronics'. Use the receipt text for context.
+    
+    Merchant: \(merchant)
+    Receipt: \(receiptText)
+    """
+    
+    let result = try await withTimeout(seconds: 15) {
+      try await self.modelManager.predict(input: self.merchant, prompt: prompt)
+    }
+    
+    let trimmedResult = result.trimmingCharacters(in: .whitespacesAndNewlines)
+    
+    return validCategories.contains(trimmedResult) ? trimmedResult : "Other"
   }
   
   private func extractMerchant(from text: String) -> String {
     let lines = text.components(separatedBy: .newlines)
-    
-    // Prioritize lines that look like merchant names
-    for line in lines {
-      let trimmed = line.trimmingCharacters(in: .whitespaces)
-      if trimmed.count > 2 && trimmed.count < 50 && !trimmed.contains("$") && !trimmed.contains("@") {
-        return trimmed
+    let storeNames = ["walmart", "starbucks", "target", "costco", "uber", "lyft"]
+    for (index, line) in lines.prefix(5).enumerated() {
+      let trimmed = line.trimmingCharacters(in: .whitespaces).lowercased()
+      if index == 0 && !trimmed.isEmpty && !trimmed.contains("$") && !trimmed.contains("@") {
+        return line.trimmingCharacters(in: .whitespaces)
+      }
+      if storeNames.contains(where: trimmed.contains) {
+        return line.trimmingCharacters(in: .whitespaces)
       }
     }
-    
-    // Fallback to first non-empty line
-    return lines.first(where: { !$0.trimmingCharacters(in: .whitespaces).isEmpty })?.trimmingCharacters(in: .whitespaces) ?? "Unknown"
+    return "Unknown"
   }
   
   private func extractAmount(from text: String) -> Double {
-    let pattern = "\\b\\d+\\.\\d{2}\\b"
-    guard let regex = try? NSRegularExpression(pattern: pattern) else { return 0 }
-    
-    let matches = regex.matches(in: text, range: NSRange(text.startIndex..., in: text))
-    let amounts = matches.compactMap { result -> Double? in
-      let substring = (text as NSString).substring(with: result.range)
-      return Double(substring)
+    let patterns = [
+      "TOTAL\\s*\\$?(\\d+\\.\\d{2})", // TOTAL $19.19
+      "SUBTOTAL\\s*\\$?(\\d+\\.\\d{2})", // SUBTOTAL $19.19
+      "\\$(\\d+\\.\\d{2})" // $19.19
+    ]
+    for pattern in patterns {
+      guard let regex = try? NSRegularExpression(pattern: pattern),
+            let match = regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
+            let range = Range(match.range(at: 1), in: text),
+            let amount = Double(text[range]) else { continue }
+      return amount
     }
-    
-    // Return the largest amount found (likely the total)
-    return amounts.max() ?? 0
+    return 0
   }
   
   private func withTimeout<T>(seconds: TimeInterval, operation: @escaping () async throws -> T) async throws -> T {
@@ -180,62 +265,23 @@ class ExpenseViewModel: ObservableObject {
         try await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
         throw TimeoutError()
       }
-      guard let result = try await group.next() else {
-        throw TimeoutError()
-      }
+      guard let result = try await group.next() else { throw TimeoutError() }
       group.cancelAll()
       return result
     }
   }
   
   func cancelProcessing() {
-    isLoading = false
-    // TODO: Add any other cancellation logic, for example:
-    // - Cancel ongoing network requests
-    // - Reset form fields
-    // - Clear any processing state
+    processingTask?.cancel()
+    Task { await MainActor.run { isLoading = false; resetForm() } }
   }
   
-  func deleteExpense(at offsets: IndexSet) {
-    Task {
-      await MainActor.run {
-        do {
-          try offsets.forEach { index in
-            let expense = expenses[index]
-            try databaseManager.deleteExpense(id: expense.id)
-            expenses.remove(at: index)
-          }
-        } catch {
-          errorMessage = "Failed to delete expense: \(error.localizedDescription)"
-          showErrorAlert = true
-        }
-      }
-    }
-  }
-}
-
-// Define helper methods to convert between Expense and database rows.
-extension Expense {
-  // Convert to a dictionary for insertion
-  func asDictionary() -> [String: Any] {
-    return [
-      "id": id,
-      "merchant": merchant,
-      "category": category,
-      "amount": amount,
-      "timestamp": timestamp.timeIntervalSince1970
-    ]
-  }
-  
-  // Create from a SQLite.Row
-  static func fromRow(_ row: Row) -> Expense {
-    return Expense(
-      id: row[Expression<Int64>("id")],
-      merchant: row[Expression<String>("merchant")],
-      category: row[Expression<String>("category")],
-      amount: row[Expression<Double>("amount")],
-      timestamp: Date(timeIntervalSince1970: row[Expression<Double>("timestamp")])
-    )
+  private func resetForm() {
+    merchant = ""
+    category = ""
+    amount = 0
+    selectedPhoto = nil
+    selectedImage = nil
   }
 }
 
