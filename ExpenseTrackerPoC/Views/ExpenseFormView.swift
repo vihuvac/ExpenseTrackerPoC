@@ -12,6 +12,8 @@ struct ExpenseFormView: View {
   @Binding var merchant: String
   @Binding var selectedPhoto: PhotosPickerItem?
   @Binding var selectedImage: UIImage?
+  @Binding var category: String
+  @State private var manualCategory: String = ""
 
   let isLoading: Bool
   let onCategorize: () async -> Void
@@ -62,6 +64,18 @@ struct ExpenseFormView: View {
           .clipShape(RoundedRectangle(cornerRadius: 8))
       }
       .disabled(isLoading || merchant.isEmpty)
+      
+      if !category.isEmpty {
+        Picker("Category", selection: $manualCategory) {
+          ForEach(["Dining", "Transportation", "Entertainment", "Groceries", "Electronics", "Other"], id: \.self) {
+            Text($0)
+          }
+        }
+        .pickerStyle(.menu)
+        .onChange(of: manualCategory) { _, newValue in
+          category = newValue
+        }
+      }
     }
     .padding()
   }
@@ -72,6 +86,7 @@ struct ExpenseFormView: View {
     merchant: .constant("Starbucks"),
     selectedPhoto: .constant(nil),
     selectedImage: .constant(nil),
+    category: .constant("Dining"),
     isLoading: false,
     onCategorize: {}
   )
