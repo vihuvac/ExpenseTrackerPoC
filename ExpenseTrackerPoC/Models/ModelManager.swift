@@ -19,6 +19,18 @@ class ModelManager {
   
   func loadModel() async throws {
     let configuration = ModelConfiguration(id: "mlx-community/phi-2-hf-4bit-mlx")
+    let cacheDir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first?
+      .appendingPathComponent("MLXModels")
+    
+    let modelIdString = configuration.name.replacingOccurrences(of: "/", with: "_")
+    let modelPath = cacheDir?.appendingPathComponent(modelIdString)
+    
+    if let modelPath = modelPath, FileManager.default.fileExists(atPath: modelPath.path) {
+      print("Model found in cache at: \(modelPath.path)")
+    } else {
+      print("Model not cached, downloading to: \(modelPath?.path ?? "unknown")")
+    }
+    
     let container = try await LLMModelFactory.shared.loadContainer(configuration: configuration) { progress in
       print("Loading phi-2: \(Int(progress.fractionCompleted * 100))%")
     }

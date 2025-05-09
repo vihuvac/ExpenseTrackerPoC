@@ -10,11 +10,10 @@ import SwiftUI
 
 struct ExpenseFormView: View {
   @ObservedObject var viewModel: ExpenseViewModel
-  
   @Environment(\.dismiss) var dismiss
   
+  @State private var amountInput: String = ""
   @State private var manualCategory: String = ""
-  @State private var manualAmount: String = ""
   @State private var showSuccess = false
   
   var body: some View {
@@ -29,19 +28,25 @@ struct ExpenseFormView: View {
             .clipShape(RoundedRectangle(cornerRadius: 8))
             .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.gray, lineWidth: 1))
             .accessibilityLabel("Merchant name")
+            .onSubmit { UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil) }
           
-          TextField("Amount", text: $manualAmount)
-            .keyboardType(.decimalPad)
-            .padding()
-            .background(Color(.systemBackground))
-            .clipShape(RoundedRectangle(cornerRadius: 8))
-            .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.gray, lineWidth: 1))
-            .accessibilityLabel("Expense amount")
-            .onChange(of: manualAmount) { _, newValue in
-              if let amount = Double(newValue) {
-                viewModel.amount = amount
-              }
+          VStack(alignment: .leading, spacing: 4) {
+            TextField("Amount", text: $amountInput)
+              .keyboardType(.decimalPad)
+              .padding()
+              .background(Color(.systemBackground))
+              .clipShape(RoundedRectangle(cornerRadius: 8))
+              .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.gray, lineWidth: 1))
+              .accessibilityLabel("Expense amount")
+              .onSubmit { UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil) }
+            
+            if viewModel.amount == 0 && !amountInput.isEmpty {
+              Text("Amount not recognized, please enter manually")
+                .font(.caption)
+                .foregroundColor(.red)
+                .accessibilityLabel("Amount not recognized, please enter manually")
             }
+          }
           
           Picker("Category", selection: $manualCategory) {
             Text("Select Category").tag("")
@@ -92,12 +97,12 @@ struct ExpenseFormView: View {
             Text("Categorize")
               .frame(maxWidth: .infinity)
               .padding()
-              .background(viewModel.isLoading ? Color.gray : Color.green)
+              .background(viewModel.isLoading || viewModel.merchant.isEmpty || amountInput.isEmpty ? Color.gray : Color.green)
               .foregroundColor(.white)
               .clipShape(RoundedRectangle(cornerRadius: 8))
               .accessibilityLabel("Categorize expense")
           }
-          .disabled(viewModel.isLoading || viewModel.merchant.isEmpty)
+          .disabled(viewModel.isLoading || viewModel.merchant.isEmpty || amountInput.isEmpty)
         }
       }
       .navigationTitle("Add Expense")
@@ -115,6 +120,26 @@ struct ExpenseFormView: View {
             .scaleEffect(1.2)
             .animation(.spring(), value: showSuccess)
         }
+      }
+      .onAppear {
+        // Initialize amountInput with viewModel.amountText
+        amountInput = viewModel.amountText
+        // Update viewModel.amount when amountInput changes
+        if let amount = Double(amountInput) {
+          viewModel.amount = amount
+        }
+      }
+      .onChange(of: amountInput) { _, newValue in
+        // Sync viewModel.amount with amountInput
+        if let amount = Double(newValue) {
+          viewModel.amount = amount
+        } else {
+          viewModel.amount = 0
+        }
+      }
+      .onChange(of: viewModel.amountText) { _, newValue in
+        // Update amountInput when viewModel.amountText changes (e.g., from OCR)
+        amountInput = newValue
       }
     }
   }

@@ -13,6 +13,8 @@ class DatabaseManager {
   private var db: Connection?
   
   private init() {
+    let start = Date()
+    
     do {
       let path = try FileManager.default
         .url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
@@ -22,25 +24,37 @@ class DatabaseManager {
       try FileManager.default.createDirectory(at: path.deletingLastPathComponent(), withIntermediateDirectories: true)
       
       let db = try Connection(path.path)
-      try db.execute("""
-        CREATE TABLE IF NOT EXISTS expense (
-          id INTEGER PRIMARY KEY,
-          merchant TEXT NOT NULL,
-          category TEXT NOT NULL,
-          amount REAL NOT NULL DEFAULT 0.0,
-          timestamp REAL NOT NULL
-        )
-      """)
       self.db = db
+      
+      // Validate and recreate table if necessary
+      try recreateTableIfNeeded()
+      
+      print("Database initialized in \(Date().timeIntervalSince(start)) seconds")
     } catch {
       print("Database initialization error: \(error)")
     }
   }
   
+  private func recreateTableIfNeeded() throws {
+    guard let db = db else { throw NSError(domain: "Database not initialized", code: -1) }
+    
+    // Drop existing table to clear corrupted data
+    try db.execute("DROP TABLE IF EXISTS expense")
+    
+    // Create table with explicit NOT NULL constraints
+    try db.execute("""
+        CREATE TABLE expense (
+            id INTEGER PRIMARY KEY,
+            merchant TEXT NOT NULL,
+            category TEXT NOT NULL,
+            amount REAL NOT NULL DEFAULT 0.0,
+            timestamp REAL NOT NULL
+        )
+    """)
+  }
+  
   func saveExpense(_ expense: Expense) throws {
-    guard let db = db else {
-      throw NSError(domain: "Database not initialized", code: -1)
-    }
+    guard let db = db else { throw NSError(domain: "Database not initialized", code: -1) }
     
     let table = Table("expense")
     let id = Expression<Int64>("id")
@@ -48,6 +62,11 @@ class DatabaseManager {
     let category = Expression<String>("category")
     let amount = Expression<Double>("amount")
     let timestamp = Expression<Double>("timestamp")
+    
+    // Validate timestamp
+    guard expense.timestamp.timeIntervalSince1970 > 0 else {
+      throw NSError(domain: "Invalid timestamp", code: -2, userInfo: [NSLocalizedDescriptionKey: "Timestamp must be a valid date"])
+    }
     
     try db.run(table.insert(
       id <- expense.id,
@@ -67,6 +86,11 @@ class DatabaseManager {
     let category = Expression<String>("category")
     let amount = Expression<Double>("amount")
     let timestamp = Expression<Double>("timestamp")
+    
+    // Validate timestamp
+    guard expense.timestamp.timeIntervalSince1970 > 0 else {
+      throw NSError(domain: "Invalid timestamp", code: -2, userInfo: [NSLocalizedDescriptionKey: "Timestamp must be a valid date"])
+    }
     
     let row = table.filter(id == expense.id)
     try db.run(row.update(
@@ -88,12 +112,17 @@ class DatabaseManager {
     let timestamp = Expression<Double>("timestamp")
     
     return try db.prepare(table).map { row in
-      Expense(
+      // Safely handle potential null timestamp (though schema enforces NOT NULL)
+      let timestampValue = row[timestamp]
+      guard timestampValue > 0 else {
+        throw NSError(domain: "Invalid data", code: -3, userInfo: [NSLocalizedDescriptionKey: "Null or invalid timestamp in database"])
+      }
+      return Expense(
         id: row[id],
         merchant: row[merchant],
         category: row[category],
         amount: row[amount],
-        timestamp: Date(timeIntervalSince1970: row[timestamp])
+        timestamp: Date(timeIntervalSince1970: timestampValue)
       )
     }
   }
@@ -125,7 +154,7 @@ class DatabaseManager {
     let rows = content.components(separatedBy: "\n").dropFirst() // Skip header
     for row in rows {
       let columns = row.split(separator: ",").map { String($0) }
-      if columns.count == 5, let id = Int64(columns[0]), let amount = Double(columns[3]), let timestamp = Double(columns[4]) {
+      if columns.count == 5, let id = Int64(columns[0]), let amount = Double(columns[3]), let timestamp = Double(columns[4]), timestamp > 0 {
         let expense = Expense(
           id: id,
           merchant: columns[1].trimmingCharacters(in: .init(charactersIn: "\"")),

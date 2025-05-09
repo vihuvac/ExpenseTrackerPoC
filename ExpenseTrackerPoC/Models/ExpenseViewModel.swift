@@ -15,6 +15,7 @@ class ExpenseViewModel: ObservableObject {
   @Published var merchant: String = ""
   @Published var category: String = ""
   @Published var amount: Double = 0
+  @Published var amountText: String = ""
   @Published var isLoading: Bool = false
   @Published var isModelLoading: Bool = true
   @Published var expenses: [Expense] = []
@@ -63,13 +64,21 @@ class ExpenseViewModel: ObservableObject {
       return
     }
     
+    guard amount > 0 else {
+      await MainActor.run {
+        errorMessage = "Please enter a valid amount"
+        showErrorAlert = true
+      }
+      return
+    }
+    
     await MainActor.run { isLoading = true }
     
     processingTask = Task {
       do {
         let receiptText = try await fetchReceiptText()
         let finalCategory = try await getFinalCategory(manualCategory: manualCategory, receiptText: receiptText)
-
+        
         let newExpense = Expense(
           id: Int64(expenses.count + 1),
           merchant: merchant,
@@ -156,6 +165,7 @@ class ExpenseViewModel: ObservableObject {
           selectedImage = uiImage
           self.merchant = merchant
           self.amount = amount
+          self.amountText = amount > 0 ? String(format: "%.2f", amount) : "" // Set TextField value
           isLoading = false
         }
       } catch {
@@ -280,6 +290,7 @@ class ExpenseViewModel: ObservableObject {
     merchant = ""
     category = ""
     amount = 0
+    amountText = ""
     selectedPhoto = nil
     selectedImage = nil
   }
