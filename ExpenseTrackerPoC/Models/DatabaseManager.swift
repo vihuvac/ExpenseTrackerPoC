@@ -18,16 +18,26 @@ class DatabaseManager {
         .url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
         .appendingPathComponent("ExpenseTrackerPoC")
         .appendingPathComponent("expenses.sqlite")
+      
+      // Temporary workaround to delete the existing database in development mode.
+      if FileManager.default.fileExists(atPath: path.path) {
+        try FileManager.default.removeItem(at: path)
+        print("Deleted existing database")
+      }
+      
       try FileManager.default.createDirectory(at: path.deletingLastPathComponent(), withIntermediateDirectories: true)
+      
       let db = try Connection(path.path)
       try db.execute("""
-          CREATE TABLE IF NOT EXISTS expense (
-              id INTEGER PRIMARY KEY,
-              merchant TEXT NOT NULL,
-              category TEXT NOT NULL,
-              timestamp TEXT NOT NULL
-          )
+        CREATE TABLE IF NOT EXISTS expense (
+            id INTEGER PRIMARY KEY,
+            merchant TEXT NOT NULL,
+            category TEXT NOT NULL,
+            amount REAL NOT NULL DEFAULT 0.0,
+            timestamp TEXT NOT NULL
+        )
       """)
+      
       self.db = db
     } catch {
       print("Database initialization error: \(error)")
@@ -42,6 +52,7 @@ class DatabaseManager {
     let id = Expression<Int64>("id")
     let merchant = Expression<String>("merchant")
     let category = Expression<String>("category")
+    let amount = Expression<Double>("amount")
     let timestamp = Expression<String>("timestamp")
     
     let formatter = ISO8601DateFormatter()
@@ -51,6 +62,7 @@ class DatabaseManager {
       id <- expense.id,
       merchant <- expense.merchant,
       category <- expense.category,
+      amount <- expense.amount,
       timestamp <- timestampString
     ))
   }
@@ -63,6 +75,7 @@ class DatabaseManager {
     let id = Expression<Int64>("id")
     let merchant = Expression<String>("merchant")
     let category = Expression<String>("category")
+    let amount = Expression<Double>("amount")
     let timestamp = Expression<String>("timestamp")
     
     let formatter = ISO8601DateFormatter()
@@ -73,8 +86,18 @@ class DatabaseManager {
         id: row[id],
         merchant: row[merchant],
         category: row[category],
+        amount: row[amount],
         timestamp: date
       )
     }
+  }
+  
+  func deleteExpense(id: Int64) throws {
+    guard let db = db else {
+      throw NSError(domain: "Database not initialized", code: -1)
+    }
+    let table = Table("expense")
+    let rowId = Expression<Int64>("id")
+    try db.run(table.filter(rowId == id).delete())
   }
 }
