@@ -17,35 +17,53 @@ struct ExpenseFormView: View {
   let onCategorize: () async -> Void
 
   var body: some View {
-    VStack(spacing: 10) {
-      TextField("Enter merchant (e.g., Starbucks)", text: $merchant)
-        .textFieldStyle(.roundedBorder)
+    VStack(spacing: 15) {
+      TextField("Enter Merchant", text: $merchant)
         .disableAutocorrection(true)
-        .padding(.horizontal)
+        .autocapitalization(.none)
+        .textInputAutocapitalization(.never)
+        .padding()
+        .background(Color(.systemBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .overlay(
+          RoundedRectangle(cornerRadius: 8)
+            .stroke(Color.gray, lineWidth: 1)
+        )
 
-      PhotosPicker("Scan Receipt", selection: $selectedPhoto, matching: .images)
-        .padding(.horizontal)
+      PhotosPicker(
+        selection: $selectedPhoto,
+        matching: .images,
+        photoLibrary: .shared()
+      ) {
+        Label("Select Receipt", systemImage: "photo")
+          .frame(maxWidth: .infinity)
+          .padding()
+          .background(Color.blue)
+          .foregroundColor(.white)
+          .clipShape(RoundedRectangle(cornerRadius: 8))
+      }
 
-      if let selectedImage {
-        Image(uiImage: selectedImage)
+      if let image = selectedImage {
+        Image(uiImage: image)
           .resizable()
           .scaledToFit()
-          .frame(height: 100)
+          .frame(height: 150)
+          .clipShape(RoundedRectangle(cornerRadius: 8))
       }
 
       Button(action: {
         Task { await onCategorize() }
       }) {
-        Text(isLoading ? "Processing..." : "Categorize")
+        Text("Categorize")
           .frame(maxWidth: .infinity)
           .padding()
-          .background(isLoading ? Color.gray : Color.blue)
+          .background(isLoading ? Color.gray : Color.green)
           .foregroundColor(.white)
-          .cornerRadius(10)
+          .clipShape(RoundedRectangle(cornerRadius: 8))
       }
       .disabled(isLoading || merchant.isEmpty)
-      .padding(.horizontal)
     }
+    .padding()
   }
 }
 

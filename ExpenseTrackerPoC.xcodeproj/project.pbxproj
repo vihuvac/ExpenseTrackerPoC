@@ -8,9 +8,12 @@
 
 /* Begin PBXBuildFile section */
 		D35347DA2DCD5BAA00874F30 /* SQLite in Frameworks */ = {isa = PBXBuildFile; productRef = D35347D92DCD5BAA00874F30 /* SQLite */; };
-		D35347EF2DCD67ED00874F30 /* MLX in Frameworks */ = {isa = PBXBuildFile; productRef = D35347EE2DCD67ED00874F30 /* MLX */; };
-		D35347F12DCD67ED00874F30 /* MLXNN in Frameworks */ = {isa = PBXBuildFile; productRef = D35347F02DCD67ED00874F30 /* MLXNN */; };
 		D35347F42DCD6ED500874F30 /* Vision.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = D35347F32DCD6ED500874F30 /* Vision.framework */; };
+		D35347F92DCD76DC00874F30 /* MLXLLM in Frameworks */ = {isa = PBXBuildFile; productRef = D35347F82DCD76DC00874F30 /* MLXLLM */; };
+		D35347FB2DCD76DC00874F30 /* MLXLMCommon in Frameworks */ = {isa = PBXBuildFile; productRef = D35347FA2DCD76DC00874F30 /* MLXLMCommon */; };
+		D35347FE2DCD7BC200874F30 /* MLX in Frameworks */ = {isa = PBXBuildFile; productRef = D35347FD2DCD7BC200874F30 /* MLX */; };
+		D35348002DCD7BC200874F30 /* MLXNN in Frameworks */ = {isa = PBXBuildFile; productRef = D35347FF2DCD7BC200874F30 /* MLXNN */; };
+		D35348032DCD91D900874F30 /* Transformers in Frameworks */ = {isa = PBXBuildFile; productRef = D35348022DCD91D900874F30 /* Transformers */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -31,9 +34,12 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				D35348032DCD91D900874F30 /* Transformers in Frameworks */,
+				D35348002DCD7BC200874F30 /* MLXNN in Frameworks */,
+				D35347F92DCD76DC00874F30 /* MLXLLM in Frameworks */,
 				D35347F42DCD6ED500874F30 /* Vision.framework in Frameworks */,
-				D35347F12DCD67ED00874F30 /* MLXNN in Frameworks */,
-				D35347EF2DCD67ED00874F30 /* MLX in Frameworks */,
+				D35347FB2DCD76DC00874F30 /* MLXLMCommon in Frameworks */,
+				D35347FE2DCD7BC200874F30 /* MLX in Frameworks */,
 				D35347DA2DCD5BAA00874F30 /* SQLite in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -87,8 +93,11 @@
 			name = ExpenseTrackerPoC;
 			packageProductDependencies = (
 				D35347D92DCD5BAA00874F30 /* SQLite */,
-				D35347EE2DCD67ED00874F30 /* MLX */,
-				D35347F02DCD67ED00874F30 /* MLXNN */,
+				D35347F82DCD76DC00874F30 /* MLXLLM */,
+				D35347FA2DCD76DC00874F30 /* MLXLMCommon */,
+				D35347FD2DCD7BC200874F30 /* MLX */,
+				D35347FF2DCD7BC200874F30 /* MLXNN */,
+				D35348022DCD91D900874F30 /* Transformers */,
 			);
 			productName = ExpenseTrackerPoC;
 			productReference = D35347B22DCD55F200874F30 /* ExpenseTrackerPoC.app */;
@@ -120,7 +129,9 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				D35347D82DCD5BAA00874F30 /* XCRemoteSwiftPackageReference "SQLite" */,
-				D35347ED2DCD67ED00874F30 /* XCRemoteSwiftPackageReference "mlx-swift" */,
+				D35347F72DCD76DC00874F30 /* XCRemoteSwiftPackageReference "mlx-swift-examples" */,
+				D35347FC2DCD7BC200874F30 /* XCRemoteSwiftPackageReference "mlx-swift" */,
+				D35348012DCD91D900874F30 /* XCRemoteSwiftPackageReference "swift-transformers" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = D35347B32DCD55F200874F30 /* Products */;
@@ -366,12 +377,28 @@
 				minimumVersion = 0.15.3;
 			};
 		};
-		D35347ED2DCD67ED00874F30 /* XCRemoteSwiftPackageReference "mlx-swift" */ = {
+		D35347F72DCD76DC00874F30 /* XCRemoteSwiftPackageReference "mlx-swift-examples" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/ml-explore/mlx-swift-examples";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.21.2;
+			};
+		};
+		D35347FC2DCD7BC200874F30 /* XCRemoteSwiftPackageReference "mlx-swift" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/ml-explore/mlx-swift";
 			requirement = {
 				kind = upToNextMajorVersion;
 				minimumVersion = 0.25.2;
+			};
+		};
+		D35348012DCD91D900874F30 /* XCRemoteSwiftPackageReference "swift-transformers" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/huggingface/swift-transformers";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.1.20;
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */
@@ -382,15 +409,30 @@
 			package = D35347D82DCD5BAA00874F30 /* XCRemoteSwiftPackageReference "SQLite" */;
 			productName = SQLite;
 		};
-		D35347EE2DCD67ED00874F30 /* MLX */ = {
+		D35347F82DCD76DC00874F30 /* MLXLLM */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = D35347ED2DCD67ED00874F30 /* XCRemoteSwiftPackageReference "mlx-swift" */;
+			package = D35347F72DCD76DC00874F30 /* XCRemoteSwiftPackageReference "mlx-swift-examples" */;
+			productName = MLXLLM;
+		};
+		D35347FA2DCD76DC00874F30 /* MLXLMCommon */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = D35347F72DCD76DC00874F30 /* XCRemoteSwiftPackageReference "mlx-swift-examples" */;
+			productName = MLXLMCommon;
+		};
+		D35347FD2DCD7BC200874F30 /* MLX */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = D35347FC2DCD7BC200874F30 /* XCRemoteSwiftPackageReference "mlx-swift" */;
 			productName = MLX;
 		};
-		D35347F02DCD67ED00874F30 /* MLXNN */ = {
+		D35347FF2DCD7BC200874F30 /* MLXNN */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = D35347ED2DCD67ED00874F30 /* XCRemoteSwiftPackageReference "mlx-swift" */;
+			package = D35347FC2DCD7BC200874F30 /* XCRemoteSwiftPackageReference "mlx-swift" */;
 			productName = MLXNN;
+		};
+		D35348022DCD91D900874F30 /* Transformers */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = D35348012DCD91D900874F30 /* XCRemoteSwiftPackageReference "swift-transformers" */;
+			productName = Transformers;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

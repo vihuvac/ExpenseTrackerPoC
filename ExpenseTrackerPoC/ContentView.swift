@@ -7,6 +7,7 @@
 
 import SwiftUI
 
+@MainActor
 struct ContentView: View {
   @StateObject private var viewModel = ExpenseViewModel()
   
@@ -19,6 +20,8 @@ struct ContentView: View {
         
         if viewModel.isModelLoading {
           ProgressView("Loading Model...")
+        } else if viewModel.isLoading {
+          ProgressView("Categorizing...")
         } else {
           ExpenseFormView(
             merchant: $viewModel.merchant,

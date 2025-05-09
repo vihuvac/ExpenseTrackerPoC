@@ -6,32 +6,69 @@
 //
 
 import Foundation
+import MLX
+import MLXLLM
+import MLXLMCommon
+import Tokenizers
 
 class ModelManager {
   static let shared = ModelManager()
-
+  private var modelContainer: ModelContainer?
+  
   private init() {}
-
+  
   func loadModel() async throws {
-    // Mock model loading
-    print("Simulating model loading...")
-    try await Task.sleep(nanoseconds: 1_000_000_000) // Simulate 1s delay
-    print("Model loaded successfully")
-  }
-
-  func predict(input: String, prompt: String) async throws -> String {
-    // Mock LLM inference
-    let fullPrompt = "\(prompt)\nInput: \(input)"
-    print("Simulating inference for prompt: \(fullPrompt)")
-    // Simple rule-based mock output
-    let merchant = input.lowercased()
-    if merchant.contains("starbucks") || merchant.contains("coffee") {
-      return "Dining"
-    } else if merchant.contains("walmart") || merchant.contains("target") {
-      return "Groceries"
-    } else if merchant.contains("netflix") || merchant.contains("amazon") {
-      return "Entertainment"
+    let configuration = ModelConfiguration(id: "mlx-community/phi-2-hf-4bit-mlx")
+    let container = try await LLMModelFactory.shared.loadContainer(configuration: configuration) { progress in
+      print("Loading phi-2: \(Int(progress.fractionCompleted * 100))%")
     }
-    return "Other"
+    modelContainer = container
+    print("Phi-2 loaded successfully")
+  }
+  
+  func predict(input: String, prompt: String) async throws -> String {
+    guard let modelContainer = modelContainer else {
+      throw NSError(domain: "Model not loaded", code: -1)
+    }
+    
+    let fullPrompt = "\(prompt)\nMerchant: \(input)"
+    let parameters = GenerateParameters(temperature: 0.7, topP: 0.9)
+    
+    let userInput = UserInput(prompt: fullPrompt)
+    
+    let maxTokens = 15 // Allow longer words like "Groceries"
+    let validCategories = ["Dining", "Transportation", "Entertainment", "Groceries", "Other"]
+    
+    let result = try await modelContainer.perform { context in
+      let lmInput = try await context.processor.prepare(input: userInput)
+      
+      // Create a dedicated class to track token count within the closure
+      // This is thread-safe because it's a reference type used within a single closure
+      final class TokenCounter {
+        var count = 0
+      }
+      let counter = TokenCounter()
+      
+      let generationResult = try MLXLMCommon.generate(
+        input: lmInput,
+        parameters: parameters,
+        context: context
+      ) { tokens in
+        counter.count += tokens.count
+        let text = context.tokenizer.decode(tokens: tokens)
+        print("Generating: \(text)")
+        if counter.count >= maxTokens || text.contains("\n") || text.contains("!") || text.contains(",") {
+          return .stop
+        }
+        return .more
+      }
+      
+      return generationResult.output
+    }
+    
+    let trimmedResult = result.trimmingCharacters(in: .whitespacesAndNewlines)
+    
+    // Validate output
+    return validCategories.contains(trimmedResult) ? trimmedResult : "Other"
   }
 }
