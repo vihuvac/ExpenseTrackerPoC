@@ -32,12 +32,12 @@ class ModelManager {
     }
     
     let fullPrompt = "\(prompt)\nMerchant: \(input)"
-    let parameters = GenerateParameters(temperature: 0.5, topP: 0.7) // Lower for precision
+    let parameters = GenerateParameters(temperature: 0.2, topP: 0.7) // Lower temperature for more precise answers
     
     let userInput = UserInput(prompt: fullPrompt)
     
-    let maxTokens = 10
-    let validCategories = ["Dining", "Transportation", "Entertainment", "Groceries", "Other"]
+    let maxTokens = 15
+    let validCategories = ["Dining", "Transportation", "Entertainment", "Groceries", "Electronics", "Other"]
     
     // Fallback for common merchants
     let merchantFallback: [String: String] = [
@@ -55,6 +55,7 @@ class ModelManager {
       
       final class TokenCounter {
         var count = 0
+        var output = ""
       }
       let counter = TokenCounter()
       
@@ -64,20 +65,23 @@ class ModelManager {
         context: context
       ) { tokens in
         counter.count += tokens.count
+        
         let text = context.tokenizer.decode(tokens: tokens)
-        let rawTokens = tokens.map { String($0) }.joined(separator: ", ")
-        print("Generating: text='\(text)', rawTokens=[\(rawTokens)]")
-        if counter.count >= maxTokens ||
-          text.contains("\n") ||
-          text.contains("!") ||
-          text.contains(",") ||
-          text.contains(".") ||
-          text.contains(" ") ||
-          text.contains(";") ||
-          validCategories.contains(text.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines))
-        {
+        counter.output += text
+        
+        print("Intermediate output: '\(text)'")
+        
+        // Only stop if we have a complete valid category or reach max tokens
+        if counter.count >= maxTokens {
           return .stop
         }
+        
+        // Check if current output contains any valid category
+        if let foundCategory = validCategories.first(where: { counter.output.localizedCaseInsensitiveContains($0) }) {
+          counter.output = foundCategory
+          return .stop
+        }
+        
         return .more
       }
       
@@ -86,6 +90,12 @@ class ModelManager {
     
     let trimmedResult = result.trimmingCharacters(in: .whitespacesAndNewlines)
     print("Final output: '\(trimmedResult)'")
-    return validCategories.contains(trimmedResult) ? trimmedResult : "Other"
+    
+    // Find the first valid category in the output (case insensitive)
+    if let foundCategory = validCategories.first(where: { trimmedResult.localizedCaseInsensitiveContains($0) }) {
+      return foundCategory
+    }
+    
+    return "Other"
   }
 }
