@@ -10,15 +10,17 @@ import SwiftUI
 
 struct CameraView: UIViewControllerRepresentable {
   @Binding var image: UIImage?
-  @Environment(\.presentationMode) var presentationMode
+  @Environment(\.dismiss) var dismiss
   
   func makeUIViewController(context: Context) -> UIImagePickerController {
     let picker = UIImagePickerController()
-    picker.sourceType = .camera
     picker.delegate = context.coordinator
-    picker.allowsEditing = false
-    picker.accessibilityLabel = "Camera for receipt capture"
-    checkCameraPermission()
+    picker.sourceType = .camera
+    picker.cameraCaptureMode = .photo // Explicitly set to photo mode
+    picker.videoQuality = .typeHigh // Use high quality to avoid configuration issues
+    if AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back) != nil {
+      picker.cameraDevice = .rear
+    }
     return picker
   }
   
@@ -26,15 +28,6 @@ struct CameraView: UIViewControllerRepresentable {
   
   func makeCoordinator() -> Coordinator {
     Coordinator(self)
-  }
-  
-  private func checkCameraPermission() {
-    let status = AVCaptureDevice.authorizationStatus(for: .video)
-    if status == .notDetermined {
-      AVCaptureDevice.requestAccess(for: .video) { _ in }
-    } else if status == .denied {
-      // Handle denial in UI (alert shown in ContentView)
-    }
   }
   
   class Coordinator: NSObject, UINavigationControllerDelegate, UIImagePickerControllerDelegate {
@@ -45,15 +38,18 @@ struct CameraView: UIViewControllerRepresentable {
     }
     
     func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]) {
-      if let image = info[.originalImage] as? UIImage {
-        parent.image = image
-        UINotificationFeedbackGenerator().notificationOccurred(.success)
+      if let uiImage = info[.originalImage] as? UIImage {
+        print("Camera captured image: \(uiImage.size)")
+        parent.image = uiImage
+      } else {
+        print("Camera failed to capture image")
       }
-      parent.presentationMode.wrappedValue.dismiss()
+      parent.dismiss()
     }
     
     func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
-      parent.presentationMode.wrappedValue.dismiss()
+      print("Camera cancelled")
+      parent.dismiss()
     }
   }
 }

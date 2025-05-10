@@ -141,10 +141,12 @@ class ExpenseViewModel: ObservableObject {
   
   func handlePhotoSelection(_ item: PhotosPickerItem?) async {
     guard let item else {
+      print("Photo selection cleared")
       await MainActor.run { resetForm() }
       return
     }
     
+    print("Handling photo selection: \(item)")
     await MainActor.run { isLoading = true }
     
     processingTask = Task {
@@ -155,17 +157,19 @@ class ExpenseViewModel: ObservableObject {
         guard let data, let uiImage = UIImage(data: data) else {
           throw NSError(domain: "Image conversion failed", code: -1)
         }
+        let resizedImage = uiImage.resized(to: CGSize(width: 1024, height: 1024))
         let text = try await withTimeout(seconds: 10) {
-          try await self.ocrManager.extractText(from: uiImage)
+          try await self.ocrManager.extractText(from: resizedImage ?? uiImage)
         }
         print("OCR extracted: \(text)")
         let merchant = extractMerchant(from: text)
         let amount = extractAmount(from: text)
         await MainActor.run {
+          print("Setting UI: merchant=\(merchant), amount=\(amount), amountText=\(amount > 0 ? String(format: "%.2f", amount) : "")")
           selectedImage = uiImage
-          self.merchant = merchant
+          self.merchant = merchant.isEmpty ? "" : merchant
           self.amount = amount
-          self.amountText = amount > 0 ? String(format: "%.2f", amount) : "" // Set TextField value
+          self.amountText = amount > 0 ? String(format: "%.2f", amount) : ""
           isLoading = false
         }
       } catch {
@@ -239,32 +243,63 @@ class ExpenseViewModel: ObservableObject {
   
   private func extractMerchant(from text: String) -> String {
     let lines = text.components(separatedBy: .newlines)
-    let storeNames = ["walmart", "starbucks", "target", "costco", "uber", "lyft"]
-    for (index, line) in lines.prefix(5).enumerated() {
+    let merchantKeywords = ["store", "market", "restaurant", "cafe", "shop", "inc", "llc"]
+    for line in lines {
       let trimmed = line.trimmingCharacters(in: .whitespaces).lowercased()
-      if index == 0 && !trimmed.isEmpty && !trimmed.contains("$") && !trimmed.contains("@") {
-        return line.trimmingCharacters(in: .whitespaces)
+      if trimmed.isEmpty || trimmed.contains("total") || trimmed.contains("$") ||
+        trimmed.contains("tax") || trimmed.contains("cash") || trimmed.contains("card")
+      {
+        continue
       }
-      if storeNames.contains(where: trimmed.contains) {
-        return line.trimmingCharacters(in: .whitespaces)
+      if merchantKeywords.contains(where: trimmed.contains) || trimmed.count > 3 {
+        // Clean special characters, keep alphanumeric and spaces
+        let cleaned = line.trimmingCharacters(in: .whitespaces)
+          .components(separatedBy: CharacterSet(charactersIn: ">,-!@#$%^&*()_+={}[]|\\:;\"'<>?,./~`"))
+          .joined()
+          .trimmingCharacters(in: .whitespaces)
+          .capitalized
+        print("Extracted merchant: \(cleaned) from line: \(line)")
+        return cleaned
       }
     }
-    return "Unknown"
+    print("No merchant found in text: \(text)")
+    return ""
   }
   
   private func extractAmount(from text: String) -> Double {
-    let patterns = [
-      "TOTAL\\s*\\$?(\\d+\\.\\d{2})", // TOTAL $19.19
-      "SUBTOTAL\\s*\\$?(\\d+\\.\\d{2})", // SUBTOTAL $19.19
-      "\\$(\\d+\\.\\d{2})" // $19.19
-    ]
-    for pattern in patterns {
-      guard let regex = try? NSRegularExpression(pattern: pattern),
-            let match = regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
-            let range = Range(match.range(at: 1), in: text),
-            let amount = Double(text[range]) else { continue }
-      return amount
+    let lines = text.components(separatedBy: .newlines)
+    let amountRegex = try! NSRegularExpression(pattern: "\\$?(\\d+[.,]\\d{2})\\b", options: .caseInsensitive)
+    var foundTotalLine = false
+    var potentialAmounts: [(amount: Double, line: String, index: Int)] = []
+    
+    for (index, line) in lines.enumerated() {
+      let trimmedLine = line.trimmingCharacters(in: .whitespaces).lowercased()
+      // Look for "TOTAL" specifically to prioritize final total
+      if trimmedLine == "total" {
+        foundTotalLine = true
+        print("Found TOTAL line at index \(index): \(line)")
+      }
+      
+      // Collect all amounts after TOTAL
+      if foundTotalLine {
+        let nsLine = line as NSString
+        if let match = amountRegex.firstMatch(in: line, options: [], range: NSRange(location: 0, length: nsLine.length)) {
+          let amountString = nsLine.substring(with: match.range(at: 1)).replacingOccurrences(of: ",", with: ".")
+          if let amount = Double(amountString) {
+            potentialAmounts.append((amount, line, index))
+            print("Found potential amount: \(amount) at index \(index): \(line)")
+          }
+        }
+      }
     }
+    
+    // Select the largest amount after TOTAL (likely the final total)
+    if let selectedAmount = potentialAmounts.max(by: { $0.amount < $1.amount }) {
+      print("Selected amount: \(selectedAmount.amount) from line: \(selectedAmount.line) at index \(selectedAmount.index)")
+      return selectedAmount.amount
+    }
+    
+    print("No amount found in text. Lines scanned: \(lines)")
     return 0
   }
   
@@ -272,7 +307,7 @@ class ExpenseViewModel: ObservableObject {
     try await withThrowingTaskGroup(of: T.self) { group in
       group.addTask { try await operation() }
       group.addTask {
-        try await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+        try await Task.sleep(nanoseconds: UInt64(seconds * 1000000000))
         throw TimeoutError()
       }
       guard let result = try await group.next() else { throw TimeoutError() }
@@ -293,6 +328,15 @@ class ExpenseViewModel: ObservableObject {
     amountText = ""
     selectedPhoto = nil
     selectedImage = nil
+  }
+}
+
+extension UIImage {
+  func resized(to size: CGSize) -> UIImage? {
+    UIGraphicsBeginImageContextWithOptions(size, false, 1.0)
+    defer { UIGraphicsEndImageContext() }
+    draw(in: CGRect(origin: .zero, size: size))
+    return UIGraphicsGetImageFromCurrentImageContext()
   }
 }
 

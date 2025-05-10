@@ -22,6 +22,10 @@ struct SummaryView: View {
       .map { (category: $0.key, total: $0.value) }
   }
   
+  private var expensesByCategory: [String: [Expense]] {
+    Dictionary(grouping: expenses, by: { $0.category })
+  }
+  
   private var totalExpenses: Double {
     expenses.reduce(0) { $0 + $1.amount }
   }
@@ -45,19 +49,42 @@ struct SummaryView: View {
           VStack(alignment: .leading, spacing: 10) {
             Text("Breakdown by Category")
               .font(.headline)
-            ForEach(sortedCategories, id: \.category) { category, total in
-              HStack {
-                Text(category)
-                  .font(.subheadline)
-                Spacer()
-                Text("$\(String(format: "%.2f", total))")
-                  .font(.subheadline)
-                  .foregroundColor(.primary)
-              }
               .padding(.horizontal)
-              .padding(.vertical, 4)
-              .background(Color(.systemGray6))
-              .clipShape(RoundedRectangle(cornerRadius: 8))
+            
+            ForEach(sortedCategories, id: \.category) { category, total in
+              VStack(alignment: .leading, spacing: 8) {
+                // Category total
+                HStack {
+                  Text(category)
+                    .font(.subheadline)
+                    .fontWeight(.bold)
+                  Spacer()
+                  Text("$\(String(format: "%.2f", total))")
+                    .font(.subheadline)
+                    .foregroundColor(.primary)
+                }
+                .padding(.horizontal)
+                .padding(.vertical, 4)
+                .background(Color(.systemGray6))
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+                
+                // List of receipts
+                if let categoryExpenses = expensesByCategory[category] {
+                  ForEach(categoryExpenses.sorted(by: { $0.merchant < $1.merchant }), id: \.id) { expense in
+                    HStack {
+                      Text(expense.merchant)
+                        .font(.subheadline)
+                      Spacer()
+                      Text("$\(String(format: "%.2f", expense.amount))")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 4)
+                  }
+                }
+              }
+              .padding(.bottom, 8)
             }
           }
           .padding(.horizontal)
@@ -139,6 +166,7 @@ struct PieChartView: View {
   SummaryView(expenses: [
     Expense(id: 1, merchant: "Starbucks", category: "Dining", amount: 20.50, timestamp: Date()),
     Expense(id: 2, merchant: "Walmart", category: "Electronics", amount: 16.98, timestamp: Date()),
-    Expense(id: 3, merchant: "Uber", category: "Transportation", amount: 15.00, timestamp: Date())
+    Expense(id: 3, merchant: "Uber", category: "Transportation", amount: 15.00, timestamp: Date()),
+    Expense(id: 4, merchant: "McDonalds", category: "Dining", amount: 12.75, timestamp: Date())
   ])
 }

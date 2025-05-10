@@ -10,29 +10,15 @@ import SwiftUI
 
 @MainActor
 struct ContentView: View {
-  @StateObject private var viewModel = ExpenseViewModel()
-  @State private var isAppLoaded = false
-  
+  @EnvironmentObject var viewModel: ExpenseViewModel
+
   var body: some View {
     ZStack {
-      if !isAppLoaded {
-        SplashView()
-          .transition(.opacity)
-      } else {
-        MainContentView(viewModel: viewModel)
-      }
-      
+      MainContentView(viewModel: viewModel)
+
       if viewModel.isModelLoading {
         LoadingOverlay()
           .transition(.opacity)
-      }
-    }
-    .task {
-      let start = Date()
-      await viewModel.loadModel()
-      print("Model loaded in \(Date().timeIntervalSince(start)) seconds")
-      withAnimation(.easeInOut(duration: 0.5)) {
-        isAppLoaded = true
       }
     }
   }
@@ -43,7 +29,7 @@ struct MainContentView: View {
   @State private var showForm = false
   @State private var showCamera = false
   @State private var selectedTab = 0
-  
+
   var body: some View {
     NavigationView {
       TabView(selection: $selectedTab) {
@@ -55,7 +41,7 @@ struct MainContentView: View {
           Label("Expenses", systemImage: "list.bullet")
         }
         .tag(0)
-        
+
         SummaryView(expenses: viewModel.expenses)
           .tabItem {
             Label("Summary", systemImage: "chart.pie")
@@ -110,29 +96,6 @@ struct MainContentView: View {
   }
 }
 
-struct SplashView: View {
-  var body: some View {
-    ZStack {
-      Color(.systemBackground)
-        .edgesIgnoringSafeArea(.all)
-      VStack {
-        Image(systemName: "dollarsign.circle.fill")
-          .resizable()
-          .scaledToFit()
-          .frame(width: 100, height: 100)
-          .foregroundColor(.blue)
-        Text("Expense Tracker")
-          .font(.largeTitle)
-          .fontWeight(.bold)
-          .foregroundColor(.primary)
-        Text("Track your expenses with ease")
-          .font(.subheadline)
-          .foregroundColor(.secondary)
-      }
-    }
-  }
-}
-
 struct LoadingOverlay: View {
   var body: some View {
     ZStack {
@@ -155,4 +118,5 @@ struct LoadingOverlay: View {
 
 #Preview {
   ContentView()
+    .environmentObject(ExpenseViewModel())
 }

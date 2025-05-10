@@ -14,21 +14,31 @@ struct ExpenseFormView: View {
   
   @State private var amountInput: String = ""
   @State private var manualCategory: String = ""
-  @State private var showSuccess = false
+  @State private var showSuccess: Bool = false
+  @State private var isCategorizing: Bool = false
   
   var body: some View {
     NavigationView {
       Form {
         Section(header: Text("Receipt Details")) {
-          TextField("Merchant", text: $viewModel.merchant)
-            .disableAutocorrection(true)
-            .textInputAutocapitalization(.never)
-            .padding()
-            .background(Color(.systemBackground))
-            .clipShape(RoundedRectangle(cornerRadius: 8))
-            .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.gray, lineWidth: 1))
-            .accessibilityLabel("Merchant name")
-            .onSubmit { UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil) }
+          VStack(alignment: .leading, spacing: 4) {
+            TextField("Merchant", text: $viewModel.merchant)
+              .disableAutocorrection(true)
+              .textInputAutocapitalization(.never)
+              .padding()
+              .background(Color(.systemBackground))
+              .clipShape(RoundedRectangle(cornerRadius: 8))
+              .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.gray, lineWidth: 1))
+              .accessibilityLabel("Merchant name")
+              .onSubmit { UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil) }
+            
+            if viewModel.merchant.isEmpty && viewModel.selectedImage != nil {
+              Text("Merchant not recognized, please enter manually")
+                .font(.caption)
+                .foregroundColor(.red)
+                .accessibilityLabel("Merchant not recognized, please enter manually")
+            }
+          }
           
           VStack(alignment: .leading, spacing: 4) {
             TextField("Amount", text: $amountInput)
@@ -40,7 +50,7 @@ struct ExpenseFormView: View {
               .accessibilityLabel("Expense amount")
               .onSubmit { UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil) }
             
-            if viewModel.amount == 0 && !amountInput.isEmpty {
+            if viewModel.amount == 0 && viewModel.selectedImage != nil {
               Text("Amount not recognized, please enter manually")
                 .font(.caption)
                 .foregroundColor(.red)
@@ -84,7 +94,9 @@ struct ExpenseFormView: View {
           
           Button(action: {
             Task {
+              isCategorizing = true // Show loading indicator
               await viewModel.categorizeExpense(manualCategory: manualCategory.isEmpty ? nil : manualCategory)
+              isCategorizing = false // Hide loading indicator
               if !viewModel.showErrorAlert {
                 showSuccess = true
                 UINotificationFeedbackGenerator().notificationOccurred(.success)
@@ -94,15 +106,24 @@ struct ExpenseFormView: View {
               }
             }
           }) {
-            Text("Categorize")
-              .frame(maxWidth: .infinity)
-              .padding()
-              .background(viewModel.isLoading || viewModel.merchant.isEmpty || amountInput.isEmpty ? Color.gray : Color.green)
-              .foregroundColor(.white)
-              .clipShape(RoundedRectangle(cornerRadius: 8))
-              .accessibilityLabel("Categorize expense")
+            if isCategorizing {
+              ProgressView()
+                .progressViewStyle(.circular)
+                .frame(maxWidth: .infinity)
+                .padding()
+                .background(Color.gray)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+            } else {
+              Text("Categorize")
+                .frame(maxWidth: .infinity)
+                .padding()
+                .background(viewModel.isLoading || viewModel.merchant.isEmpty || amountInput.isEmpty ? Color.gray : Color.green)
+                .foregroundColor(.white)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .accessibilityLabel("Categorize expense")
+            }
           }
-          .disabled(viewModel.isLoading || viewModel.merchant.isEmpty || amountInput.isEmpty)
+          .disabled(viewModel.isLoading || viewModel.merchant.isEmpty || amountInput.isEmpty || isCategorizing)
         }
       }
       .navigationTitle("Add Expense")
@@ -122,15 +143,13 @@ struct ExpenseFormView: View {
         }
       }
       .onAppear {
-        // Initialize amountInput with viewModel.amountText
+        print("ExpenseFormView onAppear: amountInput=\(amountInput), viewModel.amountText=\(viewModel.amountText)")
         amountInput = viewModel.amountText
-        // Update viewModel.amount when amountInput changes
         if let amount = Double(amountInput) {
           viewModel.amount = amount
         }
       }
       .onChange(of: amountInput) { _, newValue in
-        // Sync viewModel.amount with amountInput
         if let amount = Double(newValue) {
           viewModel.amount = amount
         } else {
@@ -138,7 +157,6 @@ struct ExpenseFormView: View {
         }
       }
       .onChange(of: viewModel.amountText) { _, newValue in
-        // Update amountInput when viewModel.amountText changes (e.g., from OCR)
         amountInput = newValue
       }
     }
