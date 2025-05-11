@@ -85,12 +85,12 @@ struct MainContentView: View {
         Text(viewModel.errorMessage)
       }
       .onChange(of: viewModel.selectedPhoto) { _, newItem in
-        Task { 
+        Task {
           await viewModel.handlePhotoSelection(newItem)
         }
       }
       .onChange(of: viewModel.selectedImage) { _, newImage in
-        if newImage != nil { 
+        if newImage != nil {
           // If we have an image from camera, process it and show form
           showForm = true
         }

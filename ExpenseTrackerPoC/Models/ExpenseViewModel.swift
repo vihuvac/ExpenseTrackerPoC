@@ -23,12 +23,12 @@ class ExpenseViewModel: ObservableObject {
   @Published var selectedImage: UIImage?
   @Published var errorMessage: String = ""
   @Published var showErrorAlert: Bool = false
-  
+
   private let modelManager = ModelManager.shared
   private let ocrManager = OCRManager.shared
   private let databaseManager = DatabaseManager.shared
   private var processingTask: Task<Void, Never>?
-  
+
   func loadModel() async {
     do {
       try await modelManager.loadModel()
@@ -46,7 +46,7 @@ class ExpenseViewModel: ObservableObject {
       }
     }
   }
-  
+
   private func getFinalCategory(manualCategory: String?, receiptText: String) async throws -> String {
     if let manualCategory = manualCategory {
       return manualCategory
@@ -54,7 +54,7 @@ class ExpenseViewModel: ObservableObject {
       return try await predictCategory(receiptText: receiptText)
     }
   }
-  
+
   func categorizeExpense(manualCategory: String? = nil) async {
     guard !merchant.isEmpty else {
       await MainActor.run {
@@ -63,7 +63,7 @@ class ExpenseViewModel: ObservableObject {
       }
       return
     }
-    
+
     guard amount > 0 else {
       await MainActor.run {
         errorMessage = "Please enter a valid amount"
@@ -71,14 +71,16 @@ class ExpenseViewModel: ObservableObject {
       }
       return
     }
-    
+
     await MainActor.run { isLoading = true }
-    
+
     processingTask = Task {
       do {
         let receiptText = try await fetchReceiptText()
-        let finalCategory = try await getFinalCategory(manualCategory: manualCategory, receiptText: receiptText)
-        
+        let finalCategory = try await getFinalCategory(
+          manualCategory: manualCategory, receiptText: receiptText
+        )
+
         let newExpense = Expense(
           id: Int64(expenses.count + 1),
           merchant: merchant,
@@ -86,9 +88,9 @@ class ExpenseViewModel: ObservableObject {
           amount: amount,
           timestamp: Date()
         )
-        
+
         try databaseManager.saveExpense(newExpense)
-        
+
         await MainActor.run {
           category = finalCategory
           expenses.append(newExpense)
@@ -104,14 +106,18 @@ class ExpenseViewModel: ObservableObject {
       await MainActor.run { isLoading = false }
     }
   }
-  
-  func editExpense(_ expense: Expense, manualCategory: String? = nil, newMerchant: String, newAmount: Double) async {
+
+  func editExpense(
+    _ expense: Expense, manualCategory: String? = nil, newMerchant: String, newAmount: Double
+  ) async {
     await MainActor.run { isLoading = true }
     processingTask = Task {
       do {
         let receiptText = try await fetchReceiptText()
-        let finalCategory = try await getFinalCategory(manualCategory: manualCategory, receiptText: receiptText)
-        
+        let finalCategory = try await getFinalCategory(
+          manualCategory: manualCategory, receiptText: receiptText
+        )
+
         let updatedExpense = Expense(
           id: expense.id,
           merchant: newMerchant,
@@ -119,9 +125,9 @@ class ExpenseViewModel: ObservableObject {
           amount: newAmount,
           timestamp: expense.timestamp
         )
-        
+
         try databaseManager.updateExpense(updatedExpense)
-        
+
         await MainActor.run {
           if let index = expenses.firstIndex(where: { $0.id == expense.id }) {
             expenses[index] = updatedExpense
@@ -138,21 +144,22 @@ class ExpenseViewModel: ObservableObject {
       await MainActor.run { isLoading = false }
     }
   }
-  
+
   func handlePhotoSelection(_ item: PhotosPickerItem?) async {
     print("handlePhotoSelection called with item: \(item != nil ? "PhotosPickerItem" : "nil")")
     await MainActor.run { isLoading = true }
-    
+
     processingTask = Task {
       do {
         // Handle both PhotosPicker and camera images
         var imageToProcess: UIImage?
-        
+
         if let item = item {
           // Process PhotosPicker item
           print("Processing PhotosPicker item")
           guard let data = try? await item.loadTransferable(type: Data.self),
-                let image = UIImage(data: data) else {
+                let image = UIImage(data: data)
+          else {
             throw NSError(domain: "Failed to load photo", code: -1, userInfo: nil)
           }
           imageToProcess = image
@@ -163,15 +170,15 @@ class ExpenseViewModel: ObservableObject {
         } else {
           throw NSError(domain: "No image available", code: -1, userInfo: nil)
         }
-        
+
         guard let image = imageToProcess else {
           throw NSError(domain: "Image processing failed", code: -1, userInfo: nil)
         }
-        
+
         // Always process the image for OCR, regardless of source
         let processedImage = preprocessImageForOCR(image)
         let extractedText = try await ocrManager.extractText(from: processedImage)
-        
+
         if extractedText.isEmpty {
           print("OCR returned empty text - using image anyway but no text extracted")
           // Still allow the user to manually enter info
@@ -181,14 +188,14 @@ class ExpenseViewModel: ObservableObject {
           }
           return
         }
-        
+
         // Extract merchant and amount
         let extractedMerchant = extractMerchant(from: extractedText)
         let extractedAmount = extractAmount(from: extractedText)
-        
+
         print("Extracted merchant: \(extractedMerchant)")
         print("Extracted amount: \(extractedAmount)")
-        
+
         await MainActor.run {
           self.selectedImage = image
           self.merchant = extractedMerchant.isEmpty ? "" : extractedMerchant
@@ -198,33 +205,26 @@ class ExpenseViewModel: ObservableObject {
         }
       } catch {
         print("Photo processing error: \(error.localizedDescription)")
-        // Don't show error if we at least have the image
-        if selectedImage == nil {
-          await MainActor.run {
-            self.errorMessage = "Failed to process receipt: \(error.localizedDescription)"
-            self.showErrorAlert = true
-          }
-        }
         await MainActor.run { isLoading = false }
       }
     }
   }
-  
+
   // Improve image quality for OCR
   private func preprocessImageForOCR(_ image: UIImage) -> UIImage {
     // Resize large images to reasonable dimensions
     let maxDimension: CGFloat = 2048
     var processedImage = image
-    
+
     if image.size.width > maxDimension || image.size.height > maxDimension {
       let scale = maxDimension / max(image.size.width, image.size.height)
       let newSize = CGSize(width: image.size.width * scale, height: image.size.height * scale)
       processedImage = image.resized(to: newSize) ?? image
     }
-    
+
     return processedImage
   }
-  
+
   func deleteExpense(at offsets: IndexSet) {
     Task {
       do {
@@ -233,7 +233,7 @@ class ExpenseViewModel: ObservableObject {
           let expense = expenses[index]
           try databaseManager.deleteExpense(id: expense.id)
         }
-        
+
         // Update the UI after all deletions are complete
         await MainActor.run {
           expenses.remove(atOffsets: offsets)
@@ -246,57 +246,61 @@ class ExpenseViewModel: ObservableObject {
       }
     }
   }
-  
+
   func exportExpenses() throws -> URL {
     try databaseManager.exportToCSV()
   }
-  
+
   func importExpenses(from url: URL) async throws {
     try databaseManager.importFromCSV(url: url)
     let updatedExpenses = try databaseManager.loadExpenses()
     await MainActor.run { expenses = updatedExpenses }
   }
-  
+
   private func fetchReceiptText() async throws -> String {
     guard let image = selectedImage else { return merchant }
     return try await withTimeout(seconds: 10) {
       try await self.ocrManager.extractText(from: image)
     }
   }
-  
+
   private func predictCategory(receiptText: String) async throws -> String {
-    let validCategories = ["Dining", "Transportation", "Entertainment", "Groceries", "Electronics", "Other"]
-    
+    let validCategories = [
+      "Dining", "Transportation", "Entertainment", "Groceries", "Electronics", "Other",
+    ]
+
     let prompt = """
     Categorize the purchase into one of: \(validCategories.joined(separator: ", ")). Return only the category name. For example, if the merchant is 'Walmart' and the receipt mentions 'TRAVEL ADAPT', return 'Electronics'. Use the receipt text for context.
-    
+
     Merchant: \(merchant)
     Receipt: \(receiptText)
     """
-    
+
     let result = try await withTimeout(seconds: 15) {
       try await self.modelManager.predict(input: self.merchant, prompt: prompt)
     }
-    
+
     let trimmedResult = result.trimmingCharacters(in: .whitespacesAndNewlines)
-    
+
     return validCategories.contains(trimmedResult) ? trimmedResult : "Other"
   }
-  
+
   private func extractMerchant(from text: String) -> String {
     let lines = text.components(separatedBy: .newlines)
     let merchantKeywords = ["store", "market", "restaurant", "cafe", "shop", "inc", "llc"]
     for line in lines {
       let trimmed = line.trimmingCharacters(in: .whitespaces).lowercased()
-      if trimmed.isEmpty || trimmed.contains("total") || trimmed.contains("$") ||
-        trimmed.contains("tax") || trimmed.contains("cash") || trimmed.contains("card")
+      if trimmed.isEmpty || trimmed.contains("total") || trimmed.contains("$")
+        || trimmed.contains("tax") || trimmed.contains("cash") || trimmed.contains("card")
       {
         continue
       }
       if merchantKeywords.contains(where: trimmed.contains) || trimmed.count > 3 {
         // Clean special characters, keep alphanumeric and spaces
         let cleaned = line.trimmingCharacters(in: .whitespaces)
-          .components(separatedBy: CharacterSet(charactersIn: ">,-!@#$%^&*()_+={}[]|\\:;\"'<>?,./~`"))
+          .components(
+            separatedBy: CharacterSet(charactersIn: ">,-!@#$%^&*()_+={}[]|\\:;\"'<>?,./~`")
+          )
           .joined()
           .trimmingCharacters(in: .whitespaces)
           .capitalized
@@ -307,22 +311,26 @@ class ExpenseViewModel: ObservableObject {
     print("No merchant found in text: \(text)")
     return ""
   }
-  
+
   private func extractAmount(from text: String) -> Double {
     let lines = text.components(separatedBy: .newlines)
-    
+
     // Look for common receipt patterns
-    let totalPattern = "(?i)(?:total|balance|amount|sum)\\s*(?:due|:)?\\s*(?:CAD|USD)?\\s*[$]?\\s*(\\d+[.,]\\d{2})"
+    let totalPattern =
+      "(?i)(?:total|balance|amount|sum)\\s*(?:due|:)?\\s*(?:CAD|USD)?\\s*[$]?\\s*(\\d+[.,]\\d{2})"
     let amountPattern = "[$]?\\s*(\\d+[.,]\\d{2})\\b"
-    
+
     // Try finding a line with "total" or similar keywords first
     for line in lines {
-      if line.range(of: "(?i)\\b(total|balance|due|amount|sum)\\b", options: .regularExpression) != nil {
+      if line.range(of: "(?i)\\b(total|balance|due|amount|sum)\\b", options: .regularExpression)
+        != nil
+      {
         if let regex = try? NSRegularExpression(pattern: totalPattern),
-           let match = regex.firstMatch(in: line, range: NSRange(location: 0, length: line.count)) {
+           let match = regex.firstMatch(in: line, range: NSRange(location: 0, length: line.count))
+        {
           let nsString = line as NSString
           let amountString = nsString.substring(with: match.range(at: 1))
-                               .replacingOccurrences(of: ",", with: ".")
+            .replacingOccurrences(of: ",", with: ".")
           if let amount = Double(amountString) {
             print("Found total amount: \(amount) in line: \(line)")
             return amount
@@ -330,27 +338,28 @@ class ExpenseViewModel: ObservableObject {
         }
       }
     }
-    
+
     // Collect all dollar amounts after finding any "total" keyword
     var foundTotalKeyword = false
     var potentialAmounts: [(amount: Double, index: Int)] = []
-    
+
     for (index, line) in lines.enumerated() {
       let lowercaseLine = line.lowercased()
-      
+
       // Look for total keyword
-      if lowercaseLine.contains("total") || 
-         lowercaseLine.contains("balance") || 
-         lowercaseLine.contains("amount due") {
+      if lowercaseLine.contains("total") || lowercaseLine.contains("balance")
+        || lowercaseLine.contains("amount due")
+      {
         foundTotalKeyword = true
         print("Found total indicator at line \(index): \(line)")
-        
+
         // Check if this line itself has an amount
         if let regex = try? NSRegularExpression(pattern: amountPattern),
-           let match = regex.firstMatch(in: line, range: NSRange(location: 0, length: line.count)) {
+           let match = regex.firstMatch(in: line, range: NSRange(location: 0, length: line.count))
+        {
           let nsString = line as NSString
           let amountString = nsString.substring(with: match.range(at: 1))
-                               .replacingOccurrences(of: ",", with: ".")
+            .replacingOccurrences(of: ",", with: ".")
           if let amount = Double(amountString) {
             print("Found amount on total line: \(amount)")
             // High priority if amount is on same line as "total"
@@ -358,47 +367,52 @@ class ExpenseViewModel: ObservableObject {
           }
         }
       }
-      
+
       // Collect all amounts, prioritizing those after a total keyword
       if let regex = try? NSRegularExpression(pattern: amountPattern),
-         let match = regex.firstMatch(in: line, range: NSRange(location: 0, length: line.count)) {
+         let match = regex.firstMatch(in: line, range: NSRange(location: 0, length: line.count))
+      {
         let nsString = line as NSString
         let amountString = nsString.substring(with: match.range(at: 1))
-                             .replacingOccurrences(of: ",", with: ".")
+          .replacingOccurrences(of: ",", with: ".")
         if let amount = Double(amountString) {
           print("Found amount \(amount) at line \(index): \(line)")
           potentialAmounts.append((amount, index))
         }
       }
     }
-    
+
     // If we found the total keyword, get the largest amount after it
     if foundTotalKeyword {
-      let amountsAfterTotal = potentialAmounts.filter { $0.index > potentialAmounts.filter { 
-        lines[$0.index].lowercased().contains("total") 
-      }.map { $0.index }.max() ?? 0 }
-      
+      let amountsAfterTotal = potentialAmounts.filter {
+        $0.index > potentialAmounts.filter {
+          lines[$0.index].lowercased().contains("total")
+        }.map { $0.index }.max() ?? 0
+      }
+
       if let largest = amountsAfterTotal.max(by: { $0.amount < $1.amount }) {
         print("Selected largest amount after total: \(largest.amount)")
         return largest.amount
       }
     }
-    
+
     // If we couldn't find a total line, just use the largest amount in the receipt
     if let largest = potentialAmounts.max(by: { $0.amount < $1.amount }) {
       print("Using largest amount in receipt: \(largest.amount)")
       return largest.amount
     }
-    
+
     print("No amount found in text")
     return 0
   }
-  
-  private func withTimeout<T>(seconds: TimeInterval, operation: @escaping () async throws -> T) async throws -> T {
+
+  private func withTimeout<T>(seconds: TimeInterval, operation: @escaping () async throws -> T)
+    async throws -> T
+  {
     try await withThrowingTaskGroup(of: T.self) { group in
       group.addTask { try await operation() }
       group.addTask {
-        try await Task.sleep(nanoseconds: UInt64(seconds * 1000000000))
+        try await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
         throw TimeoutError()
       }
       guard let result = try await group.next() else { throw TimeoutError() }
@@ -406,12 +420,17 @@ class ExpenseViewModel: ObservableObject {
       return result
     }
   }
-  
+
   func cancelProcessing() {
     processingTask?.cancel()
-    Task { await MainActor.run { isLoading = false; resetForm() } }
+    Task {
+      await MainActor.run {
+        isLoading = false
+        resetForm()
+      }
+    }
   }
-  
+
   private func resetForm() {
     merchant = ""
     category = ""
