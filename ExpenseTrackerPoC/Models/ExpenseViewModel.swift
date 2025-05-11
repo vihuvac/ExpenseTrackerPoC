@@ -17,12 +17,15 @@ class ExpenseViewModel: ObservableObject {
   @Published var amount: Double = 0
   @Published var amountText: String = ""
   @Published var isLoading: Bool = false
+  @Published var isReceiptProcessing: Bool = false
   @Published var isModelLoading: Bool = true
   @Published var expenses: [Expense] = []
   @Published var selectedPhoto: PhotosPickerItem?
   @Published var selectedImage: UIImage?
+  @Published var temporaryReceiptURL: URL?
   @Published var errorMessage: String = ""
   @Published var showErrorAlert: Bool = false
+  @Published var skeletonId: Int64 = 0
 
   private let modelManager = ModelManager.shared
   private let ocrManager = OCRManager.shared
@@ -72,7 +75,14 @@ class ExpenseViewModel: ObservableObject {
       return
     }
 
-    await MainActor.run { isLoading = true }
+    // Create a unique ID for this expense that will be used for both skeleton and expense
+    let newExpenseId = Int64(Date().timeIntervalSince1970 * 1000)
+
+    await MainActor.run {
+      skeletonId = newExpenseId // Set the skeleton ID to match the new expense
+      isLoading = true
+      isReceiptProcessing = true // Set this to true to show the skeleton loader
+    }
 
     processingTask = Task {
       do {
@@ -82,18 +92,34 @@ class ExpenseViewModel: ObservableObject {
         )
 
         let newExpense = Expense(
-          id: Int64(expenses.count + 1),
+          id: newExpenseId,
           merchant: merchant,
           category: finalCategory,
           amount: amount,
+          receiptImageURL: temporaryReceiptURL,
           timestamp: Date()
         )
 
         try databaseManager.saveExpense(newExpense)
 
+        // First add the expense to the list
         await MainActor.run {
           category = finalCategory
-          expenses.append(newExpense)
+
+          // Insert at the beginning instead of appending to the end
+          withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+            expenses.insert(newExpense, at: 0)
+          }
+        }
+
+        // Wait a brief moment before hiding the skeleton to ensure the expense is visible
+        try? await Task.sleep(nanoseconds: 100_000_000) // 100ms
+
+        // Then set isReceiptProcessing to false (after the expense is in the list)
+        await MainActor.run {
+          withAnimation(.easeOut(duration: 0.2)) {
+            isReceiptProcessing = false
+          }
           resetForm()
         }
       } catch {
@@ -103,14 +129,21 @@ class ExpenseViewModel: ObservableObject {
           showErrorAlert = true
         }
       }
-      await MainActor.run { isLoading = false }
+      await MainActor.run {
+        isLoading = false
+        // isReceiptProcessing is already set to false in the success handler
+      }
     }
   }
 
   func editExpense(
     _ expense: Expense, manualCategory: String? = nil, newMerchant: String, newAmount: Double
   ) async {
-    await MainActor.run { isLoading = true }
+    await MainActor.run {
+      skeletonId = expense.id // Use the existing expense ID for the skeleton
+      isLoading = true
+      isReceiptProcessing = true // Set this to true to show the skeleton loader
+    }
     processingTask = Task {
       do {
         let receiptText = try await fetchReceiptText()
@@ -123,14 +156,28 @@ class ExpenseViewModel: ObservableObject {
           merchant: newMerchant,
           category: finalCategory,
           amount: newAmount,
+          receiptImageURL: expense.receiptImageURL,
           timestamp: expense.timestamp
         )
 
         try databaseManager.updateExpense(updatedExpense)
 
+        // First update the expense list
         await MainActor.run {
           if let index = expenses.firstIndex(where: { $0.id == expense.id }) {
-            expenses[index] = updatedExpense
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+              expenses[index] = updatedExpense
+            }
+          }
+        }
+
+        // Small delay to ensure the expense update is visible
+        try? await Task.sleep(nanoseconds: 100_000_000) // 100ms
+
+        // Then hide the skeleton
+        await MainActor.run {
+          withAnimation(.easeOut(duration: 0.2)) {
+            isReceiptProcessing = false
           }
           resetForm()
         }
@@ -141,13 +188,22 @@ class ExpenseViewModel: ObservableObject {
           showErrorAlert = true
         }
       }
-      await MainActor.run { isLoading = false }
+      await MainActor.run {
+        isLoading = false
+        // isReceiptProcessing is already set to false in the success handler
+      }
     }
   }
 
   func handlePhotoSelection(_ item: PhotosPickerItem?) async {
     print("handlePhotoSelection called with item: \(item != nil ? "PhotosPickerItem" : "nil")")
-    await MainActor.run { isLoading = true }
+    // Generate a unique ID for this processing session
+    let processingId = Int64(Date().timeIntervalSince1970 * 1000)
+
+    await MainActor.run {
+      skeletonId = processingId // Set skeleton ID for consistent animation
+      isLoading = true
+    }
 
     processingTask = Task {
       do {
@@ -177,14 +233,27 @@ class ExpenseViewModel: ObservableObject {
 
         // Always process the image for OCR, regardless of source
         let processedImage = preprocessImageForOCR(image)
+
+        // First, display the image immediately while processing continues in the background
+        await MainActor.run {
+          self.selectedImage = image
+        }
+
+        // Extract text from the image
         let extractedText = try await ocrManager.extractText(from: processedImage)
+
+        // Save the processed image and get its URL
+        let receiptImageURL = saveReceiptImage(processedImage)
 
         if extractedText.isEmpty {
           print("OCR returned empty text - using image anyway but no text extracted")
+
           // Still allow the user to manually enter info
           await MainActor.run {
             self.selectedImage = image
+            self.temporaryReceiptURL = receiptImageURL
             isLoading = false
+            isReceiptProcessing = false
           }
           return
         }
@@ -197,20 +266,62 @@ class ExpenseViewModel: ObservableObject {
         print("Extracted amount: \(extractedAmount)")
 
         await MainActor.run {
-          self.selectedImage = image
+          // We've already set the selectedImage earlier, just update the rest of the UI
           self.merchant = extractedMerchant.isEmpty ? "" : extractedMerchant
-          self.amount = extractedAmount
-          self.amountText = extractedAmount > 0 ? String(format: "%.2f", extractedAmount) : ""
+
+          // Store the URL to use when creating the expense
+          self.temporaryReceiptURL = receiptImageURL
+
+          if extractedAmount > 0 {
+            self.amount = extractedAmount
+            self.amountText = String(format: "%.2f", extractedAmount)
+          }
+
+          // Complete the processing
           isLoading = false
+          isReceiptProcessing = false
         }
       } catch {
         print("Photo processing error: \(error.localizedDescription)")
-        await MainActor.run { isLoading = false }
+
+        await MainActor.run {
+          isLoading = false
+          isReceiptProcessing = false
+        }
       }
     }
   }
 
-  // Improve image quality for OCR
+  // Save receipt image to local storage and return URL
+  private func saveReceiptImage(_ image: UIImage) -> URL? {
+    let fileManager = FileManager.default
+    do {
+      let documentsDirectory = try fileManager.url(
+        for: .documentDirectory, in: .userDomainMask, appropriateFor: nil, create: true
+      )
+      let receiptsDirectory = documentsDirectory.appendingPathComponent(
+        "Receipts", isDirectory: true
+      )
+
+      // Create receipts directory if it doesn't exist
+      if !fileManager.fileExists(atPath: receiptsDirectory.path) {
+        try fileManager.createDirectory(at: receiptsDirectory, withIntermediateDirectories: true)
+      }
+
+      // Generate unique filename with timestamp
+      let filename = "\(Date().timeIntervalSince1970)-receipt.jpg"
+      let fileURL = receiptsDirectory.appendingPathComponent(filename)
+
+      // Save the image as JPEG
+      if let imageData = image.jpegData(compressionQuality: 0.8) {
+        try imageData.write(to: fileURL)
+        return fileURL
+      }
+    } catch {
+      print("Error saving receipt image: \(error.localizedDescription)")
+    }
+    return nil
+  } // Improve image quality for OCR
   private func preprocessImageForOCR(_ image: UIImage) -> UIImage {
     // Resize large images to reasonable dimensions
     let maxDimension: CGFloat = 2048
@@ -423,11 +534,12 @@ class ExpenseViewModel: ObservableObject {
 
   func cancelProcessing() {
     processingTask?.cancel()
-    Task {
-      await MainActor.run {
+    Task { @MainActor in
+      withAnimation(.easeOut(duration: 0.2)) {
         isLoading = false
-        resetForm()
+        isReceiptProcessing = false
       }
+      resetForm()
     }
   }
 
@@ -438,6 +550,62 @@ class ExpenseViewModel: ObservableObject {
     amountText = ""
     selectedPhoto = nil
     selectedImage = nil
+    temporaryReceiptURL = nil
+    isReceiptProcessing = false
+    // We don't reset skeletonId here as it should persist between operations
+  }
+
+  // MARK: - Helper Methods  // Method to temporarily show the skeleton loader in the expense list
+
+  // This can be called when we want to show the skeleton animation without actually processing a receipt
+  func showSkeletonLoaderTemporarily() {
+    Task {
+      let tempExpenseId = Int64(Date().timeIntervalSince1970 * 1000)
+
+      // Generate a new skeleton ID to ensure the animation refreshes
+      await MainActor.run {
+        skeletonId = tempExpenseId
+        isReceiptProcessing = true
+      }
+
+      // Wait a bit longer before replacing with real content
+      try? await Task.sleep(nanoseconds: 800_000_000) // 800ms
+
+      // Create a temporary expense that will replace the skeleton
+      let tempExpense = Expense(
+        id: tempExpenseId,
+        merchant: "Receipt Processed",
+        category: "Categorizing...",
+        amount: 0.0,
+        receiptImageURL: nil,
+        timestamp: Date()
+      )
+
+      // First add the temporary expense
+      await MainActor.run {
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+          expenses.insert(tempExpense, at: 0)
+        }
+      }
+
+      // Then hide the skeleton with a slight delay
+      try? await Task.sleep(nanoseconds: 100_000_000) // 100ms
+      await MainActor.run {
+        withAnimation(.easeOut(duration: 0.2)) {
+          isReceiptProcessing = false
+        }
+      }
+
+      // After a brief delay, remove the temporary expense
+      try? await Task.sleep(nanoseconds: 1_500_000_000) // 1.5s
+      await MainActor.run {
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+          if let index = expenses.firstIndex(where: { $0.id == tempExpense.id }) {
+            expenses.remove(at: index)
+          }
+        }
+      }
+    }
   }
 }
 

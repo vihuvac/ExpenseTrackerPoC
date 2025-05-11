@@ -35,7 +35,8 @@ struct MainContentView: View {
       TabView(selection: $selectedTab) {
         ExpenseListView(
           expenses: viewModel.expenses,
-          onDelete: { viewModel.deleteExpense(at: $0) }
+          onDelete: { viewModel.deleteExpense(at: $0) },
+          viewModel: viewModel
         )
         .tabItem {
           Label("Expenses", systemImage: "list.bullet")
@@ -60,12 +61,18 @@ struct MainContentView: View {
             photoLibrary: .shared()
           ) {
             Image(systemName: "photo")
+              .foregroundColor(.blue)
               .accessibilityLabel("Select Receipt Photo")
           }
+          .disabled(viewModel.isReceiptProcessing)
+
           Button(action: { showCamera = true }) {
             Image(systemName: "camera")
+              .foregroundColor(.blue)
               .accessibilityLabel("Take Receipt Photo")
           }
+          .disabled(viewModel.isReceiptProcessing)
+
           Button(action: { showForm = true }) {
             Image(systemName: "plus")
               .accessibilityLabel("Add Expense")
@@ -74,9 +81,22 @@ struct MainContentView: View {
       }
       .sheet(isPresented: $showForm) {
         ExpenseFormView(viewModel: viewModel)
+          .onDisappear {
+            // When the form disappears and processing is happening, make sure we're on the expense tab
+            if viewModel.isReceiptProcessing {
+              selectedTab = 0
+            }
+          }
       }
       .sheet(isPresented: $showCamera) {
         CameraView(image: $viewModel.selectedImage)
+          .onDisappear {
+            // When camera view disappears with an image, make sure to show loading state
+            if viewModel.selectedImage != nil {
+              // Set loading state immediately when the camera is closed with an image
+              viewModel.isReceiptProcessing = true
+            }
+          }
       }
       .alert("Error", isPresented: $viewModel.showErrorAlert) {
         Button("OK", role: .cancel) {}
@@ -84,15 +104,62 @@ struct MainContentView: View {
       } message: {
         Text(viewModel.errorMessage)
       }
+      .onChange(of: viewModel.isReceiptProcessing) { _, isProcessing in
+        // When processing starts, switch to the expenses tab to make the skeleton loader visible
+        if isProcessing {
+          withAnimation(.easeInOut(duration: 0.3)) {
+            selectedTab = 0 // Animate tab change
+          }
+        }
+      }
       .onChange(of: viewModel.selectedPhoto) { _, newItem in
-        Task {
-          await viewModel.handlePhotoSelection(newItem)
+        if newItem != nil {
+          // First navigate to the expenses tab to show the skeleton loader
+          withAnimation(.easeInOut(duration: 0.3)) {
+            selectedTab = 0
+          }
+
+          // Set loading state after a short delay to allow tab change animation
+          Task {
+            try? await Task.sleep(nanoseconds: 100_000_000) // 100ms
+            await MainActor.run {
+              // Set a new unique ID for the skeleton
+              viewModel.skeletonId = Int64(Date().timeIntervalSince1970 * 1000)
+              viewModel.isReceiptProcessing = true
+            }
+
+            // Process the image and show the form
+            await viewModel.handlePhotoSelection(newItem)
+
+            // After processing completes, show the form if we have an image
+            if viewModel.selectedImage != nil {
+              showForm = true
+            }
+          }
         }
       }
       .onChange(of: viewModel.selectedImage) { _, newImage in
         if newImage != nil {
-          // If we have an image from camera, process it and show form
-          showForm = true
+          // First navigate to the expenses tab to show the skeleton loader
+          withAnimation(.easeInOut(duration: 0.3)) {
+            selectedTab = 0
+          }
+
+          // Set loading state after a short delay to allow tab change animation
+          Task {
+            try? await Task.sleep(nanoseconds: 100_000_000) // 100ms
+            await MainActor.run {
+              // Set a new unique ID for the skeleton
+              viewModel.skeletonId = Int64(Date().timeIntervalSince1970 * 1000)
+              viewModel.isReceiptProcessing = true
+            }
+
+            // Process the selected image (passing nil since we're using selectedImage directly)
+            await viewModel.handlePhotoSelection(nil)
+
+            // Show the form after processing is complete
+            showForm = true
+          }
         }
       }
     }

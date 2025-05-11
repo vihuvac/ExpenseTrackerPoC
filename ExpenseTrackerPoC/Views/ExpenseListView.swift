@@ -6,44 +6,95 @@
 //
 
 import SwiftUI
+import UIKit
 
 struct ExpenseListView: View {
   let expenses: [Expense]
   var onDelete: ((IndexSet) -> Void)?
+  @ObservedObject var viewModel: ExpenseViewModel
 
   @State private var showDeleteConfirmation = false
   @State private var deleteOffsets: IndexSet?
 
   var body: some View {
     List {
-      if expenses.isEmpty {
+      // Show "No expenses yet" message when the list is empty and not processing
+      if expenses.isEmpty && !viewModel.isReceiptProcessing {
         Text("No expenses yet")
           .foregroundColor(.gray)
           .frame(maxWidth: .infinity, alignment: .center)
           .accessibilityLabel("No expenses")
+          .listRowSeparator(.hidden)
       }
-      
+
+      // In SwiftUI lists, new items are added at the top, so we need to
+      // position the skeleton loader at the top for new expenses
+      if viewModel.isReceiptProcessing {
+        SkeletonLoadingView(showText: true, id: viewModel.skeletonId)
+          .background(Color(.systemBackground))
+          .clipShape(RoundedRectangle(cornerRadius: 8))
+          .shadow(radius: 2)
+          .listRowSeparator(.hidden)
+          .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+          .transition(
+            .asymmetric(
+              insertion: .opacity.combined(
+                with: .scale(scale: 0.95).combined(with: .offset(y: -20))),
+              removal: .opacity
+            )
+          )
+      }
+
       ForEach(expenses) { expense in
-        VStack(alignment: .leading, spacing: 8) {
-          Text("Merchant: \(expense.merchant)")
-            .font(.headline)
-          Text("Category: \(expense.category)")
-          Text("Amount: $\(String(format: "%.2f", expense.amount))")
-          Text("Date: \(expense.timestamp, style: .date)")
-            .font(.caption)
+        HStack(spacing: 12) {
+          VStack(alignment: .leading, spacing: 8) {
+            Text("Merchant: \(expense.merchant)")
+              .font(.headline)
+            Text("Category: \(expense.category)")
+            Text("Amount: $\(String(format: "%.2f", expense.amount))")
+            Text("Date: \(expense.timestamp, style: .date)")
+              .font(.caption)
+          }
+          .padding()
+          .frame(maxWidth: .infinity, alignment: .leading)
+
+          // Display receipt image if available
+          if let receiptURL = expense.receiptImageURL,
+             let imageData = try? Data(contentsOf: receiptURL),
+             let image = UIImage(data: imageData)
+          {
+            Image(uiImage: image)
+              .resizable()
+              .scaledToFit()
+              .frame(maxWidth: 100, maxHeight: 100)
+              .clipShape(RoundedRectangle(cornerRadius: 8))
+              .padding(.trailing, 8)
+          }
         }
-        .padding()
+        .id(expense.id) // Make sure each expense has a stable ID
         .background(Color(.systemBackground))
         .clipShape(RoundedRectangle(cornerRadius: 8))
         .shadow(radius: 2)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("Expense: \(expense.merchant), \(expense.category), $\(String(format: "%.2f", expense.amount))")
+        .accessibilityLabel(
+          "Expense: \(expense.merchant), \(expense.category), $\(String(format: "%.2f", expense.amount))"
+        )
+        .listRowSeparator(.hidden)
+        .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+        .transition(
+          .asymmetric(
+            insertion: .opacity.combined(with: .scale(scale: 0.95).combined(with: .offset(y: 20))),
+            removal: .opacity.combined(with: .scale(scale: 0.95))
+          )
+        )
       }
       .onDelete { offsets in
         deleteOffsets = offsets
         showDeleteConfirmation = true
       }
     }
+    .listStyle(PlainListStyle())
+    .animation(.spring(response: 0.3, dampingFraction: 0.7), value: viewModel.isReceiptProcessing)
     .alert("Delete Expense", isPresented: $showDeleteConfirmation) {
       Button("Cancel", role: .cancel) {}
       Button("Delete", role: .destructive) {
@@ -62,8 +113,23 @@ struct ExpenseListView: View {
 #Preview {
   ExpenseListView(
     expenses: [
-      Expense(id: 1, merchant: "Starbucks", category: "Dining", amount: 20.50, timestamp: Date()),
-      Expense(id: 2, merchant: "Walmart", category: "Electronics", amount: 16.98, timestamp: Date())
-    ]
+      Expense(
+        id: 1,
+        merchant: "Starbucks",
+        category: "Dining",
+        amount: 20.50,
+        receiptImageURL: nil,
+        timestamp: Date()
+      ),
+      Expense(
+        id: 2,
+        merchant: "Walmart",
+        category: "Electronics",
+        amount: 16.98,
+        receiptImageURL: nil,
+        timestamp: Date()
+      ),
+    ],
+    viewModel: ExpenseViewModel()
   )
 }

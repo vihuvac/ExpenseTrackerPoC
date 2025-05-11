@@ -80,12 +80,37 @@ struct ExpenseFormView: View {
         }
 
         if let image = viewModel.selectedImage {
-          Image(uiImage: image)
-            .resizable()
-            .scaledToFit()
-            .frame(height: 150)
-            .clipShape(RoundedRectangle(cornerRadius: 8))
-            .accessibilityLabel("Receipt image")
+          ZStack {
+            Image(uiImage: image)
+              .resizable()
+              .scaledToFit()
+              .frame(height: 150)
+              .clipShape(RoundedRectangle(cornerRadius: 8))
+              .accessibilityLabel("Receipt image")
+
+            if viewModel.isReceiptProcessing {
+              ZStack {
+                Color.black.opacity(0.4)
+                VStack {
+                  ProgressView()
+                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                    .scaleEffect(1.3)
+                  Text("Analyzing Receipt...")
+                    .font(.headline)
+                    .foregroundColor(.white)
+                    .padding(.top, 8)
+                  Text("Extracting text and details")
+                    .font(.caption)
+                    .foregroundColor(.white.opacity(0.9))
+                    .padding(.top, 2)
+                }
+              }
+              .frame(height: 150)
+              .cornerRadius(8)
+              .transition(.opacity)
+              .animation(.easeInOut, value: viewModel.isReceiptProcessing)
+            }
+          }
         }
 
         Section {
@@ -94,27 +119,37 @@ struct ExpenseFormView: View {
             matching: .images,
             photoLibrary: .shared()
           ) {
-            Label("Select Receipt", systemImage: "photo")
-              .frame(maxWidth: .infinity)
-              .padding()
-              .background(Color.blue)
-              .foregroundColor(.white)
-              .clipShape(RoundedRectangle(cornerRadius: 8))
-              .accessibilityLabel("Select receipt photo")
+            Label(
+              "Select Receipt", systemImage: "photo"
+            )
+            .frame(maxWidth: .infinity)
+            .padding()
+            .background(viewModel.isReceiptProcessing ? Color.gray : Color.blue)
+            .foregroundColor(.white)
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .accessibilityLabel("Select receipt photo")
           }
+          .disabled(viewModel.isReceiptProcessing)
 
           Button(action: {
             Task {
               isCategorizing = true // Show loading indicator
+              // Dismiss the form before starting the categorization
+              // This allows the skeleton loader to be visible in the list view
+              dismiss()
+
+              // Add a small delay before processing to allow the form dismissal animation to complete
+              try? await Task.sleep(nanoseconds: 200_000_000) // 200ms
+
+              // Now start processing
               await viewModel.categorizeExpense(
                 manualCategory: manualCategory.isEmpty ? nil : manualCategory)
+
               isCategorizing = false // Hide loading indicator
+
               if !viewModel.showErrorAlert {
                 showSuccess = true
                 UINotificationFeedbackGenerator().notificationOccurred(.success)
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
-                  dismiss()
-                }
               }
             }
           }) {
@@ -146,7 +181,19 @@ struct ExpenseFormView: View {
       .navigationTitle("Add Expense")
       .toolbar {
         ToolbarItem(placement: .cancellationAction) {
-          Button("Cancel") { dismiss() }
+          Button("Cancel") {
+            // Reset the processing state when canceling
+            viewModel.cancelProcessing()
+            dismiss()
+          }
+        }
+
+        // Show loading indicator in the toolbar when processing receipt
+        ToolbarItem(placement: .primaryAction) {
+          if viewModel.isReceiptProcessing {
+            ProgressView()
+              .progressViewStyle(.circular)
+          }
         }
       }
       .overlay {
@@ -166,9 +213,12 @@ struct ExpenseFormView: View {
         // Initialize amount input from viewModel
         amountInput = viewModel.amountText
 
-        // Process any camera image that might be present
-        // Only process the image if both merchant and amount are empty
-        if viewModel.selectedImage != nil && viewModel.merchant.isEmpty && viewModel.amount == 0 {
+        // If we don't have merchant or amount data yet, but do have an image,
+        // ensure the processing indicator is shown
+        if viewModel.merchant.isEmpty && viewModel.amount == 0 && viewModel.selectedImage != nil {
+          // This ensures the loading state is visible even if arriving from a different entry point
+          viewModel.isReceiptProcessing = true
+
           print("Processing camera image in ExpenseFormView.onAppear")
           Task {
             await viewModel.handlePhotoSelection(nil)
