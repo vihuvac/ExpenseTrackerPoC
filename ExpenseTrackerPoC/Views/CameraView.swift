@@ -16,11 +16,8 @@ struct CameraView: UIViewControllerRepresentable {
     let picker = UIImagePickerController()
     picker.delegate = context.coordinator
     picker.sourceType = .camera
-    picker.cameraCaptureMode = .photo // Explicitly set to photo mode
-    picker.videoQuality = .typeHigh // Use high quality to avoid configuration issues
-    if AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back) != nil {
-      picker.cameraDevice = .rear
-    }
+    picker.cameraCaptureMode = .photo // Ensure photo mode
+    picker.cameraDevice = .rear // Directly set to rear camera
     return picker
   }
   
@@ -40,11 +37,28 @@ struct CameraView: UIViewControllerRepresentable {
     func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]) {
       if let uiImage = info[.originalImage] as? UIImage {
         print("Camera captured image: \(uiImage.size)")
-        parent.image = uiImage
+        
+        // Process the image to ensure it's properly oriented
+        if let fixedImage = fixImageOrientation(uiImage) {
+          parent.image = fixedImage
+          print("Image orientation fixed and assigned to binding")
+        } else {
+          parent.image = uiImage
+          print("Using original image (orientation fix failed)")
+        }
       } else {
         print("Camera failed to capture image")
       }
       parent.dismiss()
+    }
+    
+    private func fixImageOrientation(_ image: UIImage) -> UIImage? {
+      // Images from camera are sometimes rotated incorrectly
+      UIGraphicsBeginImageContextWithOptions(image.size, false, image.scale)
+      defer { UIGraphicsEndImageContext() }
+      
+      image.draw(in: CGRect(origin: .zero, size: image.size))
+      return UIGraphicsGetImageFromCurrentImageContext()
     }
     
     func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {

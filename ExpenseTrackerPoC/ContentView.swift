@@ -85,10 +85,15 @@ struct MainContentView: View {
         Text(viewModel.errorMessage)
       }
       .onChange(of: viewModel.selectedPhoto) { _, newItem in
-        Task { await viewModel.handlePhotoSelection(newItem) }
+        Task { 
+          await viewModel.handlePhotoSelection(newItem)
+        }
       }
       .onChange(of: viewModel.selectedImage) { _, newImage in
-        if newImage != nil { showForm = true }
+        if newImage != nil { 
+          // If we have an image from camera, process it and show form
+          showForm = true
+        }
       }
     }
     .accentColor(.blue)

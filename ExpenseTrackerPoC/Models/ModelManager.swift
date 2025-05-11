@@ -25,8 +25,20 @@ class ModelManager {
     let modelIdString = configuration.name.replacingOccurrences(of: "/", with: "_")
     let modelPath = cacheDir?.appendingPathComponent(modelIdString)
     
+    // Log cache directory contents
+    if let cacheDir = cacheDir {
+      do {
+        let contents = try FileManager.default.contentsOfDirectory(atPath: cacheDir.path)
+        print("Cache directory contents: \(contents)")
+      } catch {
+        print("Failed to list cache directory: \(error)")
+      }
+    }
+    
+    var isCached = false
     if let modelPath = modelPath, FileManager.default.fileExists(atPath: modelPath.path) {
       print("Model found in cache at: \(modelPath.path)")
+      isCached = true
     } else {
       print("Model not cached, downloading to: \(modelPath?.path ?? "unknown")")
     }
@@ -36,11 +48,15 @@ class ModelManager {
     }
     modelContainer = container
     print("Phi-2 loaded successfully")
+    
     // Verify cache after loading
     if let modelPath = modelPath, FileManager.default.fileExists(atPath: modelPath.path) {
       print("Model cache verified at: \(modelPath.path)")
     } else {
       print("Warning: Model cache not found after loading")
+      if !isCached {
+        print("Note: Model was downloaded, but cache may not have been written correctly")
+      }
     }
   }
   

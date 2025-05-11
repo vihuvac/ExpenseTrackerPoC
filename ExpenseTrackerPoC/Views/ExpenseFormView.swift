@@ -144,7 +144,17 @@ struct ExpenseFormView: View {
       }
       .onAppear {
         print("ExpenseFormView onAppear: amountInput=\(amountInput), viewModel.amountText=\(viewModel.amountText)")
+        // Initialize amount input from viewModel
         amountInput = viewModel.amountText
+        
+        // Process any camera image that might be present
+        if let image = viewModel.selectedImage, viewModel.merchant.isEmpty && viewModel.amount == 0 {
+          print("Processing camera image in ExpenseFormView.onAppear")
+          Task {
+            await viewModel.handlePhotoSelection(nil)
+          }
+        }
+        
         if let amount = Double(amountInput) {
           viewModel.amount = amount
         }
