@@ -111,25 +111,31 @@ struct ExpenseListView: View {
 }
 
 #Preview {
-  ExpenseListView(
-    expenses: [
-      Expense(
-        id: 1,
-        merchant: "Starbucks",
-        category: "Dining",
-        amount: 20.50,
-        receiptImageURL: nil,
-        timestamp: Date()
-      ),
-      Expense(
-        id: 2,
-        merchant: "Walmart",
-        category: "Electronics",
-        amount: 16.98,
-        receiptImageURL: nil,
-        timestamp: Date()
-      ),
-    ],
-    viewModel: ExpenseViewModel()
+  let previewViewModel = ExpenseViewModel(isPreviewMode: true)
+  let sampleExpenses = [
+    Expense(
+      id: 1,
+      merchant: "Starbucks",
+      category: "Dining",
+      amount: 20.50,
+      receiptImageURL: nil,
+      timestamp: Date()
+    ),
+    Expense(
+      id: 2,
+      merchant: "Walmart",
+      category: "Electronics",
+      amount: 16.98,
+      receiptImageURL: nil,
+      timestamp: Date()
+    ),
+  ]
+
+  // Optional: simulate skeleton loading for preview
+  // previewViewModel.isReceiptProcessing = true
+
+  return ExpenseListView(
+    expenses: sampleExpenses,
+    viewModel: previewViewModel
   )
 }

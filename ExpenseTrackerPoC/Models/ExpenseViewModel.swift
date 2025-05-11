@@ -27,12 +27,42 @@ class ExpenseViewModel: ObservableObject {
   @Published var showErrorAlert: Bool = false
   @Published var skeletonId: Int64 = 0
 
-  private let modelManager = ModelManager.shared
-  private let ocrManager = OCRManager.shared
-  private let databaseManager = DatabaseManager.shared
+  // Flag to determine if we're in preview mode
+  private var isPreviewMode: Bool
+
+  private let modelManager: ModelManager
+  private let ocrManager: OCRManager
+  private let databaseManager: DatabaseManager
   private var processingTask: Task<Void, Never>?
 
+  init(isPreviewMode: Bool = false) {
+    self.isPreviewMode = isPreviewMode
+
+    if isPreviewMode {
+      // Use dummy managers for preview
+      self.modelManager = ModelManager.shared
+      self.ocrManager = OCRManager.shared
+      self.databaseManager = DatabaseManager.shared
+      // Skip loading in preview mode
+      self.isModelLoading = false
+    } else {
+      // Use real managers for actual app
+      self.modelManager = ModelManager.shared
+      self.ocrManager = OCRManager.shared
+      self.databaseManager = DatabaseManager.shared
+    }
+  }
+
   func loadModel() async {
+    // Skip actual loading if in preview mode
+    if isPreviewMode {
+      await MainActor.run {
+        isModelLoading = false
+        // You could set some sample expenses here
+      }
+      return
+    }
+
     do {
       try await modelManager.loadModel()
       let savedExpenses = try databaseManager.loadExpenses()

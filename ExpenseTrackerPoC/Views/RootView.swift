@@ -8,7 +8,7 @@
 import SwiftUI
 
 struct RootView: View {
-  @StateObject private var viewModel = ExpenseViewModel()
+  @StateObject private var viewModel = ExpenseViewModel(isPreviewMode: false)
   @State private var isAppLoaded = false
 
   var body: some View {
@@ -54,5 +54,23 @@ struct SplashView: View {
 }
 
 #Preview {
-  RootView()
+  // Create a preview-specific version of RootView that skips loading
+  struct PreviewRootView: View {
+    @StateObject private var viewModel = ExpenseViewModel(isPreviewMode: true)
+    @State private var isAppLoaded = true // Start with app loaded for preview
+
+    var body: some View {
+      ZStack {
+        if !isAppLoaded {
+          SplashView()
+            .transition(.opacity)
+        } else {
+          ContentView()
+            .environmentObject(viewModel)
+        }
+      }
+    }
+  }
+
+  return PreviewRootView()
 }

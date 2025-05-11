@@ -121,7 +121,7 @@ struct MainContentView: View {
 
           // Set loading state after a short delay to allow tab change animation
           Task {
-            try? await Task.sleep(nanoseconds: 100_000_000) // 100ms
+            try? await Task.sleep(nanoseconds: 100000000) // 100ms
             await MainActor.run {
               // Set a new unique ID for the skeleton
               viewModel.skeletonId = Int64(Date().timeIntervalSince1970 * 1000)
@@ -147,7 +147,7 @@ struct MainContentView: View {
 
           // Set loading state after a short delay to allow tab change animation
           Task {
-            try? await Task.sleep(nanoseconds: 100_000_000) // 100ms
+            try? await Task.sleep(nanoseconds: 100000000) // 100ms
             await MainActor.run {
               // Set a new unique ID for the skeleton
               viewModel.skeletonId = Int64(Date().timeIntervalSince1970 * 1000)
@@ -189,6 +189,29 @@ struct LoadingOverlay: View {
 }
 
 #Preview {
-  ContentView()
-    .environmentObject(ExpenseViewModel())
+  // Create a view model in preview mode
+  let previewViewModel = ExpenseViewModel(isPreviewMode: true)
+
+  // Add some sample expenses for preview
+  previewViewModel.expenses = [
+    Expense(
+      id: 1,
+      merchant: "Starbucks",
+      category: "Dining",
+      amount: 5.75,
+      receiptImageURL: nil,
+      timestamp: Date()
+    ),
+    Expense(
+      id: 2,
+      merchant: "Office Depot",
+      category: "Office Supplies",
+      amount: 27.99,
+      receiptImageURL: nil,
+      timestamp: Date().addingTimeInterval(-86400) // Yesterday
+    ),
+  ]
+
+  return ContentView()
+    .environmentObject(previewViewModel)
 }

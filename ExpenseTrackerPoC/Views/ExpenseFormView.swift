@@ -244,5 +244,11 @@ struct ExpenseFormView: View {
 }
 
 #Preview {
-  ExpenseFormView(viewModel: ExpenseViewModel())
+  // Use preview mode and add some sample data
+  let previewViewModel = ExpenseViewModel(isPreviewMode: true)
+  previewViewModel.merchant = "Coffee Shop"
+  previewViewModel.amount = 12.99
+  previewViewModel.amountText = "12.99"
+
+  return ExpenseFormView(viewModel: previewViewModel)
 }
