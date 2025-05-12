@@ -140,17 +140,18 @@ class ExpenseViewModel: ObservableObject {
           withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
             expenses.insert(newExpense, at: 0)
           }
-        }
 
-        // Wait a brief moment before hiding the skeleton to ensure the expense is visible
-        try? await Task.sleep(nanoseconds: 100_000_000) // 100ms
+          // Keep skeleton visible a bit longer to ensure smooth transition
+          Task {
+            // Wait for the expense to be visible and rendered
+            try? await Task.sleep(nanoseconds: 500_000_000) // 500ms
 
-        // Then set isReceiptProcessing to false (after the expense is in the list)
-        await MainActor.run {
-          withAnimation(.easeOut(duration: 0.2)) {
-            isReceiptProcessing = false
+            // Then hide the skeleton with animation
+            withAnimation(.easeOut(duration: 0.3)) {
+              isReceiptProcessing = false
+            }
+            resetForm()
           }
-          resetForm()
         }
       } catch {
         print("Categorization error: \(error)")
