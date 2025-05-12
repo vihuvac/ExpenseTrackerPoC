@@ -71,8 +71,12 @@ struct ExpenseFormView: View {
             ForEach(
               ["Dining", "Transportation", "Entertainment", "Groceries", "Electronics", "Other"],
               id: \.self
-            ) {
-              Text($0)
+            ) { category in
+              HStack {
+                CategoryIconView(category: category, size: 20)
+                  .padding(.trailing, 5)
+                Text(category)
+              }
             }
           }
           .pickerStyle(.menu)

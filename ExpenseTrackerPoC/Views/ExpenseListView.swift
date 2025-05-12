@@ -11,6 +11,7 @@ import UIKit
 struct ExpenseListView: View {
   let expenses: [Expense]
   var onDelete: ((IndexSet) -> Void)?
+
   @ObservedObject var viewModel: ExpenseViewModel
 
   @State private var showDeleteConfirmation = false
@@ -69,6 +70,10 @@ struct ExpenseListView: View {
               .frame(maxWidth: 100, maxHeight: 100)
               .clipShape(RoundedRectangle(cornerRadius: 8))
               .padding(.trailing, 8)
+          } else {
+            // Display category icon when no receipt image
+            CategoryIconView(category: expense.category, size: 50)
+              .padding(.trailing, 12)
           }
         }
         .id(expense.id) // Make sure each expense has a stable ID
@@ -126,6 +131,22 @@ struct ExpenseListView: View {
       merchant: "Walmart",
       category: "Electronics",
       amount: 16.98,
+      receiptImageURL: nil,
+      timestamp: Date()
+    ),
+    Expense(
+      id: 3,
+      merchant: "Uber",
+      category: "Transportation",
+      amount: 25.00,
+      receiptImageURL: nil,
+      timestamp: Date()
+    ),
+    Expense(
+      id: 4,
+      merchant: "Amazon",
+      category: "Shopping",
+      amount: 67.45,
       receiptImageURL: nil,
       timestamp: Date()
     ),
