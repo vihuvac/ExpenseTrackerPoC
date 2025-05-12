@@ -129,8 +129,5 @@ struct SplashView: View {
 }
 
 #Preview {
-  Group {
-    SplashView()
-      .preferredColorScheme(.light)
-  }
+  SplashView()
 }
