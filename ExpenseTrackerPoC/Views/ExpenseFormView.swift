@@ -16,6 +16,7 @@ struct ExpenseFormView: View {
   @State private var manualCategory: String = ""
   @State private var showSuccess: Bool = false
   @State private var isCategorizing: Bool = false
+  @State private var showImageDetail: Bool = false
 
   var body: some View {
     NavigationView {
@@ -92,6 +93,13 @@ struct ExpenseFormView: View {
               .clipShape(RoundedRectangle(cornerRadius: 8))
               .accessibilityLabel("Receipt image")
 
+            // Add a subtle overlay to indicate tappability when not processing
+            if !viewModel.isReceiptProcessing {
+              Color.blue.opacity(0.1)
+                .frame(height: 150)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+            }
+
             if viewModel.isReceiptProcessing {
               ZStack {
                 Color.black.opacity(0.4)
@@ -113,6 +121,11 @@ struct ExpenseFormView: View {
               .cornerRadius(8)
               .transition(.opacity)
               .animation(.easeInOut, value: viewModel.isReceiptProcessing)
+            }
+          }
+          .onTapGesture {
+            if !viewModel.isReceiptProcessing {
+              showImageDetail = true
             }
           }
         }
@@ -242,6 +255,11 @@ struct ExpenseFormView: View {
       }
       .onChange(of: viewModel.amountText) { _, newValue in
         amountInput = newValue
+      }
+      .fullScreenCover(isPresented: $showImageDetail) {
+        if let image = viewModel.selectedImage {
+          ImageDetailView(image: image)
+        }
       }
     }
   }
