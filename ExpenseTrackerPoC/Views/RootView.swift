@@ -19,45 +19,28 @@ struct RootView: View {
       } else {
         ContentView()
           .environmentObject(viewModel)
+          .transition(.opacity)
       }
     }
     .task {
+      // Allow the SplashView to show its animations for 2.5 seconds
+      // before transitioning to the main app
+      try? await Task.sleep(nanoseconds: 2_500_000_000)
       await viewModel.loadModel()
-      withAnimation(.easeInOut(duration: 0.5)) {
+
+      withAnimation(.easeInOut(duration: 0.7)) {
         isAppLoaded = true
       }
     }
   }
 }
 
-struct SplashView: View {
-  var body: some View {
-    ZStack {
-      Color(.systemBackground)
-        .edgesIgnoringSafeArea(.all)
-      VStack {
-        Image(systemName: "dollarsign.circle.fill")
-          .resizable()
-          .scaledToFit()
-          .frame(width: 100, height: 100)
-          .foregroundColor(.blue)
-        Text("Expense Tracker")
-          .font(.largeTitle)
-          .fontWeight(.bold)
-          .foregroundColor(.primary)
-        Text("Track your expenses with ease")
-          .font(.subheadline)
-          .foregroundColor(.secondary)
-      }
-    }
-  }
-}
-
 #Preview {
-  // Create a preview-specific version of RootView that skips loading
+  // Create a preview-specific version of RootView that shows the splash screen
+  // Note: We use isAppLoaded = false to see the SplashView in the preview
   struct PreviewRootView: View {
     @StateObject private var viewModel = ExpenseViewModel(isPreviewMode: true)
-    @State private var isAppLoaded = true // Start with app loaded for preview
+    @State private var isAppLoaded = false
 
     var body: some View {
       ZStack {
@@ -67,6 +50,16 @@ struct SplashView: View {
         } else {
           ContentView()
             .environmentObject(viewModel)
+            .transition(.opacity)
+        }
+      }
+      // For preview only: auto-transition after a few seconds
+      .onAppear {
+        // Simulate app loading after 3 seconds in preview
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+          withAnimation(.easeInOut(duration: 0.7)) {
+            isAppLoaded = true
+          }
         }
       }
     }
