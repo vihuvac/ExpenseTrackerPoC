@@ -269,17 +269,18 @@ struct RootView: View {
 
 - [Apple SwiftUI Documentation](https://developer.apple.com/documentation/swiftui)
 - [SwiftUI by Example](https://www.hackingwithswift.com/quick-start/swiftui)
+- [SwiftUI Handbook](https://designcode.io/swiftui-handbook)
 - [Stanford CS193p - SwiftUI Course](https://cs193p.sites.stanford.edu/)
 
 ### Design Patterns
 
 - [MVVM in SwiftUI](https://www.raywenderlich.com/4161005-mvvm-with-swiftui)
-- [SwiftUI and Combine](https://www.appcoda.com/learnswiftui/swiftui-combine.html)
+- [SwiftUI and Combine](https://www.kodeco.com/books/combine-asynchronous-programming-with-swift/v2.0/chapters/15-in-practice-combine-swiftui)
 
 ### Charts and Visualizations
 
 - [Charts in SwiftUI](https://developer.apple.com/documentation/Charts)
-- [Creating Custom Charts](https://swiftwithmajid.com/2019/12/11/building-charts-in-swiftui/)
+- [Creating Custom Charts](https://developer.apple.com/documentation/charts/creating-a-chart-using-swift-charts)
 
 ## License
 
