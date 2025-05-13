@@ -9,7 +9,10 @@ import SwiftUI
 
 struct RootView: View {
   @StateObject private var viewModel = ExpenseViewModel(isPreviewMode: false)
+
   @State private var isAppLoaded = false
+  @State private var isModelLoaded = false
+  @State private var minimumSplashTimeElapsed = false
 
   var body: some View {
     ZStack {
@@ -23,11 +26,21 @@ struct RootView: View {
       }
     }
     .task {
-      // Allow the SplashView to show its animations for 2.5 seconds
-      // before transitioning to the main app
+      // Start model loading immediately
+      Task {
+        await viewModel.loadModel()
+        isModelLoaded = true
+        checkAndTransition()
+      }
+      // Ensure minimum splash screen duration
       try? await Task.sleep(nanoseconds: 2_500_000_000)
-      await viewModel.loadModel()
+      minimumSplashTimeElapsed = true
+      checkAndTransition()
+    }
+  }
 
+  private func checkAndTransition() {
+    if isModelLoaded && minimumSplashTimeElapsed {
       withAnimation(.easeInOut(duration: 0.7)) {
         isAppLoaded = true
       }
